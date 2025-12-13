@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador del Efecto Doppler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            overflow-x: hidden;
+        }
+        canvas {
+            touch-action: none;
+        }
+        /* Estilos compartidos para sliders */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            margin-top: -6px; /* Centrar en el track */
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-6 shadow-lg">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">🚑 El Efecto Doppler</h1>
+            <p class="text-blue-100 text-sm md:text-base">Teoría y simulación interactiva</p>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center justify-start pt-8 px-4 pb-12">
+
+        <!-- Teoría Científica -->
+        <section class="max-w-4xl w-full mx-auto p-6 md:p-8 bg-white rounded-xl shadow-md border border-slate-200 mb-8">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">Fundamentos Científicos</h2>
+            <div class="prose text-slate-600 max-w-none">
+                <p class="mb-4 leading-relaxed">
+                    El <strong>Efecto Doppler</strong> es el cambio aparente en la frecuencia de una onda percibida por un observador cuando existe movimiento relativo entre la fuente de la onda y dicho observador.
+                </p>
+                
+                <div class="grid md:grid-cols-2 gap-6 my-6">
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-3">La Fórmula General</h3>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl md:text-2xl text-blue-700 italic">
+                                f = f₀ · <span class="inline-block align-middle text-lg mx-1">(</span><span class="inline-flex flex-col align-middle text-center text-sm leading-tight border-b border-black">v ± vᵣ</span><span class="inline-flex flex-col align-middle text-center text-sm leading-tight">v ∓ vₛ</span><span class="inline-block align-middle text-lg mx-1">)</span>
+                            </p>
+                        </div>
+                        <ul class="text-xs md:text-sm text-slate-500 space-y-1">
+                            <li><strong class="text-slate-700">f</strong> : Frecuencia percibida (lo que escuchas)</li>
+                            <li><strong class="text-slate-700">f₀</strong> : Frecuencia emitida (fuente original)</li>
+                            <li><strong class="text-slate-700">v</strong> : Velocidad del sonido en el medio (aprox 343 m/s)</li>
+                            <li><strong class="text-slate-700">vᵣ</strong> : Velocidad del receptor (observador)</li>
+                            <li><strong class="text-slate-700">vₛ</strong> : Velocidad de la fuente (ambulancia)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="flex flex-col justify-center text-sm text-slate-600">
+                        <p class="mb-3">
+                            <strong class="text-blue-600">Acercamiento:</strong> Cuando la fuente se acerca al observador, los frentes de onda se comprimen. La longitud de onda disminuye y la frecuencia aumenta. El sonido se percibe más <strong>agudo</strong>.
+                        </p>
+                        <p>
+                            <strong class="text-red-600">Alejamiento:</strong> Cuando la fuente se aleja, los frentes de onda se expanden. La longitud de onda aumenta y la frecuencia disminuye. El sonido se percibe más <strong>grave</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Canvas Container -->
+        <div class="relative w-full max-w-4xl bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
+            <div class="absolute top-4 left-4 bg-white/90 px-3 py-1 rounded text-xs font-mono text-slate-500 pointer-events-none z-10 border border-slate-100">
+                Velocidad Onda (v): Constante
+            </div>
+            <canvas id="dopplerCanvas" class="w-full h-64 md:h-96 block cursor-pointer bg-slate-50"></canvas>
+            
+            <!-- Instructions Overlay (fades out) -->
+            <div id="instructionOverlay" class="absolute inset-0 flex items-center justify-center bg-black/60 transition-opacity duration-500 pointer-events-none z-20">
+                <div class="text-center">
+                    <p class="text-white font-bold text-xl mb-2">Simulador Interactivo</p>
+                    <p class="text-slate-200 text-sm bg-slate-800/80 px-4 py-2 rounded-full animate-pulse">
+                        Usa los controles de abajo 👇
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="w-full max-w-4xl mt-6 p-6 bg-white rounded-xl shadow-md border border-slate-200 flex flex-col gap-8">
+            
+            <!-- Velocidad Control -->
+            <div>
+                <label for="velocitySlider" class="flex justify-between font-bold text-slate-700 mb-2">
+                    <span>Velocidad de la Ambulancia</span>
+                    <span id="speedValue" class="font-mono text-blue-600 bg-blue-50 px-2 rounded">0.0 Mach</span>
+                </label>
+                <div class="flex items-center justify-between text-xs text-slate-400 font-semibold px-1 mb-2 tracking-wide">
+                    <span>-1.2 Mach</span>
+                    <span>0 Mach</span>
+                    <span>1.2 Mach</span>
+                </div>
+                <input type="range" id="velocitySlider" min="-3.5" max="3.5" step="0.1" value="0" 
+                       class="w-full bg-transparent appearance-none">
+                <p class="text-xs text-slate-500 mt-2 text-center">Mueve la fuente a izquierda o derecha (3.0x = 1 Mach)</p>
+            </div>
+
+            <!-- Frecuencia Control -->
+            <div>
+                <label for="freqSlider" class="flex justify-between font-bold text-slate-700 mb-2">
+                    <span>Frecuencia de Emisión</span>
+                    <span id="freqValue" class="font-mono text-purple-600 bg-purple-50 px-2 rounded">Media</span>
+                </label>
+                <div class="flex items-center justify-between text-xs text-slate-400 font-semibold px-1 mb-2 tracking-wide uppercase">
+                    <span>Baja (Grave)</span>
+                    <span>Alta (Agudo)</span>
+                </div>
+                <input type="range" id="freqSlider" min="5" max="60" step="1" value="25" 
+                       class="w-full bg-transparent appearance-none">
+                <p class="text-xs text-slate-500 mt-2 text-center">Cambia cuántas ondas se emiten por segundo</p>
+            </div>
+
+            <!-- Audio Control -->
+            <div class="flex justify-center pt-4 border-t border-slate-200">
+                <button id="audioToggle" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md transition-all duration-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <span id="audioButtonText">Escuchar Sonido</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Explanation Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl mt-8 mb-8">
+            
+            <!-- Blue Shift Card -->
+            <div id="card-approach" class="bg-blue-50 p-6 rounded-xl border border-blue-100 transition-all duration-300 opacity-50">
+                <div class="flex items-center mb-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-blue-800">Frente a la Fuente</h2>
+                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Acercamiento</span>
+                    </div>
+                </div>
+                <div class="space-y-2 text-sm text-slate-700">
+                    <p>Las ondas se comprimen.</p>
+                    <p>La frecuencia aumenta.</p>
+                    <p class="font-bold text-blue-700">Efecto: Sonido más agudo.</p>
+                </div>
+            </div>
+
+            <!-- Red Shift Card -->
+            <div id="card-recede" class="bg-red-50 p-6 rounded-xl border border-red-100 transition-all duration-300 opacity-50">
+                <div class="flex items-center mb-3">
+                    <div class="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white mr-3 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-red-800">Detrás de la Fuente</h2>
+                        <span class="text-xs font-bold text-red-600 uppercase tracking-wider">Alejamiento</span>
+                    </div>
+                </div>
+                <div class="space-y-2 text-sm text-slate-700">
+                    <p>Las ondas se expanden.</p>
+                    <p>La frecuencia disminuye.</p>
+                    <p class="font-bold text-red-700">Efecto: Sonido más grave.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sonic Boom / Special Case Section -->
+        <section class="max-w-4xl w-full mx-auto p-6 md:p-8 bg-amber-50 text-slate-800 rounded-xl shadow-md border border-amber-200 mb-8">
+            <div class="flex flex-col gap-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-amber-700 mb-3">🚀 Caso Especial: La Barrera del Sonido</h2>
+                    <p class="text-slate-700 mb-4 leading-relaxed">
+                        ¿Qué pasa si la fuente se mueve <strong>igual o más rápido</strong> que la propia velocidad del sonido?
+                    </p>
+                    <ul class="space-y-3 text-sm text-slate-700">
+                        <li class="flex items-start gap-2">
+                            <span class="text-amber-500 text-xl">⚡</span>
+                            <div>
+                                <strong class="text-slate-900">Onda de Choque (Mach 1):</strong>
+                                <p class="opacity-90">Si la ambulancia viaja a la misma velocidad que el sonido, las ondas no pueden escapar hacia adelante y se acumulan creando una barrera de alta presión.</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-amber-500 text-xl">💥</span>
+                            <div>
+                                <strong class="text-slate-900">Estallido Sónico (Supersónico):</strong>
+                                <p class="opacity-90">Si supera esa velocidad, deja las ondas atrás formando un cono (Cono de Mach). Escuchamos esto como una explosión o "boom" sónico al pasar.</p>
+                            </div>
+                        </li>
+                    </ul>
+                    <div class="mt-6 bg-white/80 p-4 rounded-lg border border-amber-200 shadow-sm">
+                        <p class="text-sm font-mono text-amber-800">
+                            💡 <strong>Pruébalo en el simulador:</strong> Mueve el deslizador de velocidad al máximo (extremo derecho o izquierdo) para ver cómo la ambulancia adelanta a sus propios círculos.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <img src="barrera_delsonido.png" alt="Barrera del sonido" class="max-w-full h-auto rounded-lg shadow-md border border-amber-300">
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-slate-800 text-slate-400 py-8 text-center text-sm border-t border-slate-700 mt-auto">
+        <p class="mb-2">Simulación Educativa del Efecto Doppler</p>
+        <p class="opacity-60 text-xs">Nota: La velocidad de la onda es constante en el medio, independientemente de la velocidad de la fuente.</p>
+    </footer>
+
+    <script>
+        // Setup Canvas
+        const canvas = document.getElementById('dopplerCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const velocitySlider = document.getElementById('velocitySlider');
+        const freqSlider = document.getElementById('freqSlider');
+        const speedValueDisplay = document.getElementById('speedValue');
+        const freqValueDisplay = document.getElementById('freqValue');
+        const overlay = document.getElementById('instructionOverlay');
+        const cardApproach = document.getElementById('card-approach');
+        const cardRecede = document.getElementById('card-recede');
+        const audioToggle = document.getElementById('audioToggle');
+        const audioButtonText = document.getElementById('audioButtonText');
+
+        // State
+        let width, height;
+        let cx, cy;
+        
+        // Physics constants
+        const waveSpeed = 3; // Velocidad de expansión de la onda
+        const soundSpeed = 343; // Velocidad del sonido en m/s (para cálculo Doppler)
+        
+        // Simulation variables
+        let emissionTimer = 0; // Counts frames to decide when to emit
+        let sourceX = 0;
+        let sourceSpeed = 0;
+        let emissionDelay = 20; // Default frames between emissions (Inverse of Frequency)
+        let waves = []; // Array of {x, y, r, opacity}
+        
+        // Audio variables
+        let audioContext = null;
+        let oscillator = null;
+        let gainNode = null;
+        let isAudioPlaying = false;
+        const baseFrequency = 440; // Frecuencia base en Hz (La4)
+        const observerX = 0; // Se calculará dinámicamente (centro)
+        let observerY = 0; // Se calculará dinámicamente (un poco más abajo)
+
+        // Resize function
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight || 384; 
+            canvas.width = width;
+            canvas.height = height;
+            cx = width / 2;
+            cy = height / 2;
+            
+            // Observer position: centered horizontally, slightly lower
+            observerY = cy + 80;
+            
+            // If first load, center source
+            if (waves.length === 0 && sourceX === 0) {
+                sourceX = cx;
+            }
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Interaction Logic: Velocity
+        velocitySlider.addEventListener('input', (e) => {
+            sourceSpeed = parseFloat(e.target.value);
+            // Convertir a Mach: 3.0x = 1 Mach
+            const machValue = sourceSpeed / 3.0;
+            speedValueDisplay.innerText = machValue.toFixed(2) + ' Mach';
+            overlay.style.opacity = '0';
+            updateCards(sourceSpeed);
+        });
+
+        // Interaction Logic: Frequency
+        freqSlider.addEventListener('input', (e) => {
+            // Map slider (5 to 60) to delay frames.
+            // High slider value = High Frequency = Low Delay
+            // Let's invert it:
+            const val = parseInt(e.target.value);
+            emissionDelay = Math.max(5, 65 - val); // Simple inversion mapping
+            
+            // Update Text label
+            if(val < 20) freqValueDisplay.innerText = "Baja";
+            else if(val > 45) freqValueDisplay.innerText = "Alta";
+            else freqValueDisplay.innerText = "Media";
+            
+            overlay.style.opacity = '0';
+        });
+
+        function updateCards(speed) {
+            // Reset transparencies
+            if (Math.abs(speed) < 0.2) {
+                cardApproach.style.opacity = '0.5';
+                cardRecede.style.opacity = '0.5';
+                cardApproach.classList.remove('ring-2', 'ring-blue-400', 'shadow-lg');
+                cardRecede.classList.remove('ring-2', 'ring-red-400', 'shadow-lg');
+                return;
+            }
+
+            // Always highlight both when moving, because both effects happen simultaneously 
+            // relative to observers on either side
+            cardApproach.style.opacity = '1';
+            cardRecede.style.opacity = '1';
+            
+            if (speed > 0) {
+                // Moving Right: Right side approaches, Left side recedes
+                // We just highlight the cards to show the effect exists
+                cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
+                cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
+            } else {
+                // Moving Left
+                cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
+                cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
+            }
+        }
+
+        // Animation Loop
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Draw Background Grid
+            drawGrid();
+
+            // 2. Update Source Position
+            sourceX += sourceSpeed;
+
+            // Boundary Logic: Wrap around smoothly
+            if (sourceX > width + 60) sourceX = -60;
+            else if (sourceX < -60) sourceX = width + 60;
+
+            // 3. Emit Waves Logic
+            emissionTimer++;
+            if (emissionTimer >= emissionDelay) {
+                // Only emit if onscreen (optimization)
+                if (sourceX > -70 && sourceX < width + 70) {
+                    waves.push({
+                        x: sourceX,
+                        y: cy,
+                        r: 0,
+                        opacity: 1
+                    });
+                }
+                emissionTimer = 0;
+            }
+
+            // 4. Update and Draw Waves
+            for (let i = waves.length - 1; i >= 0; i--) {
+                let w = waves[i];
+                
+                // Expand wave
+                w.r += waveSpeed;
+                
+                // Fade out based on size
+                if (w.r > Math.max(width, height) * 0.7) {
+                    w.opacity -= 0.015;
+                }
+
+                if (w.opacity <= 0) {
+                    waves.splice(i, 1);
+                    continue;
+                }
+
+                // Draw Wave
+                ctx.beginPath();
+                ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+                
+                // Color Doppler Shift visualization (subtle)
+                // If the wave center is to the right of current position (source moved left away from it), it's "behind" -> Redder?
+                // Actually, standard view: Just keep them uniform blue for clarity, 
+                // or we could tint them slightly based on source speed direction at time of emission? 
+                // Let's stick to clean blue for physics clarity.
+                ctx.strokeStyle = `rgba(59, 130, 246, ${w.opacity})`; 
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+            }
+
+            // 5. Draw Ambulance
+            drawAmbulance(sourceX, cy, sourceSpeed);
+
+            // 6. Draw Observer
+            drawObserver(cx, observerY);
+
+            // 7. Update Audio if playing
+            if (isAudioPlaying && oscillator) {
+                updateAudioFrequency();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function drawGrid() {
+            ctx.strokeStyle = '#f1f5f9';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            // Vertical lines only to emphasize horizontal movement
+            for(let x=0; x<width; x+=40) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            ctx.stroke();
+        }
+
+        function drawObserver(x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.beginPath();
+            ctx.ellipse(0, 20, 15, 4, 0, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Body (simple person shape)
+            ctx.fillStyle = '#3b82f6'; // Blue
+            ctx.beginPath();
+            ctx.arc(0, -5, 8, 0, Math.PI * 2); // Head
+            ctx.fill();
+            
+            // Body
+            ctx.fillRect(-6, 3, 12, 18);
+            
+            // Arms
+            ctx.fillRect(-10, 5, 4, 12);
+            ctx.fillRect(6, 5, 4, 12);
+            
+            // Legs
+            ctx.fillRect(-6, 21, 5, 12);
+            ctx.fillRect(1, 21, 5, 12);
+            
+            // Ear indicator (if audio is playing)
+            if (isAudioPlaying) {
+                ctx.fillStyle = '#10b981'; // Green
+                ctx.beginPath();
+                ctx.arc(-10, -8, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(10, -8, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+
+        function drawAmbulance(x, y, speed) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // Flip if moving left
+            if (speed < 0) ctx.scale(-1, 1);
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.beginPath();
+            ctx.ellipse(0, 15, 25, 6, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Body
+            ctx.fillStyle = '#ef4444'; // Red-500
+            ctx.beginPath();
+            ctx.roundRect(-22, -12, 44, 24, 6);
+            ctx.fill();
+
+            // Cabin Window
+            ctx.fillStyle = '#bfdbfe'; // Blue-200
+            ctx.beginPath();
+            ctx.roundRect(0, -10, 18, 10, 2);
+            ctx.fill();
+
+            // Cross Details
+            ctx.fillStyle = 'white';
+            ctx.fillRect(-12, -6, 14, 4); // horizontal
+            ctx.fillRect(-7, -11, 4, 14); // vertical
+
+            // Wheels
+            ctx.fillStyle = '#1e293b'; // Slate-800
+            ctx.beginPath();
+            ctx.arc(-14, 12, 6, 0, Math.PI * 2);
+            ctx.arc(14, 12, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Wheel hubs
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath();
+            ctx.arc(-14, 12, 2, 0, Math.PI * 2);
+            ctx.arc(14, 12, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Siren Light
+            // Flashes faster if frequency is high (just for fun visual sync)
+            const flashSpeed = emissionDelay < 15 ? 5 : 10;
+            const isFlash = Math.floor(Date.now() / (flashSpeed * 20)) % 2 === 0;
+            
+            ctx.fillStyle = isFlash ? '#fee2e2' : '#b91c1c'; // Bright to dark red
+            ctx.beginPath();
+            ctx.arc(0, -14, 4, 0, Math.PI * 2, true); // Top light
+            ctx.fill();
+            
+            // Glow effect
+            if (isFlash) {
+                ctx.fillStyle = 'rgba(254, 226, 226, 0.4)';
+                ctx.beginPath();
+                ctx.arc(0, -14, 12, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Audio Functions
+        function calculateDopplerFrequency() {
+            // Fórmula del efecto Doppler: f = f₀ * v / (v ∓ vₛ)
+            // Observador estático: vᵣ = 0
+            // Si se acerca: f = f₀ * v / (v - vₛ) → frecuencia aumenta (más agudo)
+            // Si se aleja: f = f₀ * v / (v + vₛ) → frecuencia disminuye (más grave)
+            
+            const observerXPos = cx;
+            const dx = observerXPos - sourceX; // dx > 0 si ambulancia está a la izquierda
+            
+            // Convertir velocidad del canvas a m/s aproximado
+            const sourceSpeedMs = sourceSpeed * (soundSpeed / 3.0);
+            
+            // Determinar si se acerca o se aleja
+            // sourceSpeed > 0 = moviéndose a la derecha
+            // Si está a la izquierda (dx > 0) y se mueve a la derecha (sourceSpeed > 0) → se acerca
+            // Si está a la derecha (dx < 0) y se mueve a la derecha (sourceSpeed > 0) → se aleja
+            // Si está a la derecha (dx < 0) y se mueve a la izquierda (sourceSpeed < 0) → se acerca
+            // Si está a la izquierda (dx > 0) y se mueve a la izquierda (sourceSpeed < 0) → se aleja
+            
+            const isApproaching = (dx > 0 && sourceSpeed > 0) || (dx < 0 && sourceSpeed < 0);
+            
+            let perceivedFreq;
+            
+            if (isApproaching) {
+                // Se acerca: f = f₀ * v / (v - vₛ)
+                // vₛ debe ser positivo (velocidad hacia el observador)
+                const vSource = Math.abs(sourceSpeedMs);
+                const denominator = soundSpeed - vSource;
+                
+                if (denominator <= 0 || denominator < soundSpeed * 0.1) {
+                    // Evitar valores inválidos o muy cercanos a Mach 1
+                    return baseFrequency * 2; // Frecuencia máxima cuando está muy cerca
+                }
+                
+                perceivedFreq = baseFrequency * (soundSpeed / denominator);
+            } else {
+                // Se aleja: f = f₀ * v / (v + vₛ)
+                const vSource = Math.abs(sourceSpeedMs);
+                const denominator = soundSpeed + vSource;
+                
+                perceivedFreq = baseFrequency * (soundSpeed / denominator);
+            }
+            
+            // Limitar frecuencia a rango audible (20 Hz - 20000 Hz)
+            return Math.max(20, Math.min(20000, perceivedFreq));
+        }
+
+        function updateAudioFrequency() {
+            if (!oscillator) return;
+            
+            const newFreq = calculateDopplerFrequency();
+            oscillator.frequency.setValueAtTime(newFreq, audioContext.currentTime);
+        }
+
+        function startAudio() {
+            if (audioContext === null) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            oscillator = audioContext.createOscillator();
+            gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(baseFrequency, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            isAudioPlaying = true;
+            audioButtonText.textContent = 'Detener Sonido';
+            audioToggle.classList.remove('bg-green-600', 'hover:bg-green-700');
+            audioToggle.classList.add('bg-red-600', 'hover:bg-red-700');
+        }
+
+        function stopAudio() {
+            if (oscillator) {
+                oscillator.stop();
+                oscillator.disconnect();
+                gainNode.disconnect();
+                oscillator = null;
+                gainNode = null;
+            }
+            isAudioPlaying = false;
+            audioButtonText.textContent = 'Escuchar Sonido';
+            audioToggle.classList.remove('bg-red-600', 'hover:bg-red-700');
+            audioToggle.classList.add('bg-green-600', 'hover:bg-green-700');
+        }
+
+        // Audio Toggle Event
+        audioToggle.addEventListener('click', () => {
+            if (isAudioPlaying) {
+                stopAudio();
+            } else {
+                startAudio();
+            }
+        });
+
+        // Start
+        animate();
+
+    </script>
+</body>
+</html>
