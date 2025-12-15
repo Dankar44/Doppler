@@ -1,19 +1,84 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador del Efecto Doppler</title>
+    <title>Efecto Doppler | Mouse Interactivo</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuración de Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'doppler-dark': '#0f172a',
+                        'doppler-blue': '#0ea5e9',
+                    },
+                    animation: {
+                        'float': 'float 8s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-15px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f4f8;
-            overflow-x: hidden;
+            background-color: #0f172a;
+            color: white;
+            cursor: crosshair; /* Cursor de precisión para la interacción */
         }
         canvas {
             touch-action: none;
         }
+        
+        /* Efecto de cristal esmerilado sutil para el nav */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        /* Texto no seleccionable para no interferir con el canvas */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        /* Estilos para el contenido del simulador con fondo blanco */
+        #simulator-content {
+            background-color: white;
+        }
+        
+        /* Estilos para el simulador del delfín */
+        .dolphin-tool:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        
+        .trash-hover {
+            transform: scale(1.2);
+            filter: brightness(1.5);
+        }
+        
         /* Estilos compartidos para sliders */
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
@@ -50,37 +115,103 @@
             background: #e2e8f0;
             border-radius: 10px;
         }
+        
+        /* Estilos para la pill de navegación */
+        #nav-pill-container {
+            position: relative;
+            display: inline-flex;
+        }
+        
+        #nav-pill-container button {
+            position: relative;
+            z-index: 10;
+        }
+        
+        #nav-indicator {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            background: #2563eb; /* blue-600 */
+            border-radius: 6px;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+        }
+        
+        #nav-pill-container button {
+            min-width: 120px;
+        }
+        
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+<body class="font-sans antialiased min-h-full flex flex-col">
 
-    <!-- Header -->
-    <header class="bg-blue-600 text-white p-6 shadow-lg">
-        <div class="max-w-4xl mx-auto text-center">
-            <h1 class="text-3xl md:text-4xl font-bold mb-2">🚑 El Efecto Doppler</h1>
-            <p class="text-blue-100 text-sm md:text-base">Teoría y simulación interactiva</p>
+    <!-- Fondo Animado de Ondas -->
+    <div id="canvas-container">
+        <canvas id="dopplerCanvas"></canvas>
+    </div>
+
+    <!-- Barra de Navegación Minimalista -->
+    <nav class="fixed w-full z-50 glass-panel">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-2 h-2 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
+                <span class="font-bold text-xl tracking-widest text-white/90">DOPPLER<span class="text-cyan-400">.FX</span></span>
+            </div>
+            
+            <!-- Selector de Modo (Estilo Toggle) -->
+            <div class="bg-slate-800/80 p-1 rounded-full flex items-center border border-slate-700/50 backdrop-blur-md" id="nav-pill-container">
+                <button onclick="showSection('contexto')" id="nav-contexto" class="relative px-6 py-1.5 rounded-full text-sm font-medium transition-all z-10 bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500">
+                    Simulador
+                </button>
+                <button onclick="showSection('profundidad')" id="nav-profundidad" class="relative px-5 py-1.5 rounded-full text-sm font-medium transition-colors z-10 text-slate-400 hover:text-white">
+                    En Profundidad
+                </button>
+                <div id="nav-indicator" class="absolute top-1 bottom-1 bg-blue-600 rounded-full transition-all duration-300 ease-in-out z-0" style="left: 4px; width: calc(50% - 4px);"></div>
+            </div>
         </div>
-    </header>
+    </nav>
 
-    <main class="flex-grow flex flex-col items-center justify-start pt-8 px-4 pb-12">
+    <!-- Sección Hero (Portada) -->
+    <section id="hero-section" class="relative z-10">
+        <!-- Título del Hero -->
+        <div class="flex items-center justify-center min-h-screen pointer-events-none no-select">
+            <div class="text-center px-4">
+                <div class="animate-float">
+                    <h1 class="text-6xl md:text-9xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-cyan-100 via-blue-500 to-indigo-900 drop-shadow-2xl opacity-90">
+                        EL EFECTO <br> DOPPLER
+                    </h1>
+                </div>
+                <p id="hero-description" class="mt-8 text-lg md:text-xl text-blue-200/40 font-light tracking-wide max-w-lg mx-auto">
+                    Mueve el cursor para perturbar el espacio-tiempo.
+                </p>
+            </div>
+        </div>
+    </section>
+    <!-- FIN HERO SECTION -->
+    
+    <!-- Contenido del Simulador (separado del hero, con fondo blanco) -->
+    <div id="simulator-content" class="w-full flex flex-col items-center justify-start px-4 pb-12 relative z-10 bg-white min-h-screen">
 
+        <!-- SECCIÓN: CONTEXTO -->
+        <div id="section-contexto" class="w-full flex flex-col items-center">
+        
         <!-- Teoría Científica -->
-        <section class="max-w-4xl w-full mx-auto p-6 md:p-8 bg-white rounded-xl shadow-md border border-slate-200 mb-8">
-            <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2">Fundamentos Científicos</h2>
-            <div class="prose text-slate-600 max-w-none">
-                <p class="mb-4 leading-relaxed">
+        <section class="max-w-6xl w-full mx-auto p-8 md:p-10 bg-white rounded-xl shadow-md border border-slate-200 mb-8">
+            <h2 class="text-3xl md:text-4xl font-bold text-slate-800 mb-6 border-b-2 border-blue-300 pb-3">Fundamentos Científicos</h2>
+            <div class="prose text-slate-600 max-w-none text-lg">
+                <p class="mb-5 leading-relaxed text-base md:text-lg">
                     El <strong>Efecto Doppler</strong> es el cambio aparente en la frecuencia de una onda percibida por un observador cuando existe movimiento relativo entre la fuente de la onda y dicho observador.
                 </p>
                 
-                <div class="grid md:grid-cols-2 gap-6 my-6">
-                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
-                        <h3 class="font-bold text-slate-800 mb-3">La Fórmula General</h3>
-                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
-                            <p class="font-serif text-xl md:text-2xl text-blue-700 italic">
-                                f = f₀ · <span class="inline-block align-middle text-lg mx-1">(</span><span class="inline-flex flex-col align-middle text-center text-sm leading-tight border-b border-black">v ± vᵣ</span><span class="inline-flex flex-col align-middle text-center text-sm leading-tight">v ∓ vₛ</span><span class="inline-block align-middle text-lg mx-1">)</span>
+                <div class="grid md:grid-cols-2 gap-8 my-8">
+                    <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-4 text-xl">La Fórmula General</h3>
+                        <div class="text-center bg-white p-5 rounded border border-slate-100 shadow-inner mb-4">
+                            <p class="font-serif text-2xl md:text-3xl text-blue-700 italic">
+                                f = f₀ · <span class="inline-block align-middle text-xl mx-1">(</span><span class="inline-flex flex-col align-middle text-center text-base leading-tight border-b border-black">v ± vᵣ</span><span class="inline-flex flex-col align-middle text-center text-base leading-tight">v ∓ vₛ</span><span class="inline-block align-middle text-xl mx-1">)</span>
                             </p>
                         </div>
-                        <ul class="text-xs md:text-sm text-slate-500 space-y-1">
+                        <ul class="text-sm md:text-base text-slate-600 space-y-2">
                             <li><strong class="text-slate-700">f</strong> : Frecuencia percibida (lo que escuchas)</li>
                             <li><strong class="text-slate-700">f₀</strong> : Frecuencia emitida (fuente original)</li>
                             <li><strong class="text-slate-700">v</strong> : Velocidad del sonido en el medio (aprox 343 m/s)</li>
@@ -89,11 +220,11 @@
                         </ul>
                     </div>
                     
-                    <div class="flex flex-col justify-center text-sm text-slate-600">
-                        <p class="mb-3">
+                    <div class="flex flex-col justify-center text-base md:text-lg text-slate-600">
+                        <p class="mb-4 leading-relaxed">
                             <strong class="text-blue-600">Acercamiento:</strong> Cuando la fuente se acerca al observador, los frentes de onda se comprimen. La longitud de onda disminuye y la frecuencia aumenta. El sonido se percibe más <strong>agudo</strong>.
                         </p>
-                        <p>
+                        <p class="leading-relaxed">
                             <strong class="text-red-600">Alejamiento:</strong> Cuando la fuente se aleja, los frentes de onda se expanden. La longitud de onda aumenta y la frecuencia disminuye. El sonido se percibe más <strong>grave</strong>.
                         </p>
                     </div>
@@ -101,12 +232,17 @@
             </div>
         </section>
         
+        <!-- Título del Simulador -->
+        <div class="w-full max-w-6xl mx-auto mb-6">
+            <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Simulador 1: La ambulancia</h2>
+        </div>
+        
         <!-- Canvas Container -->
-        <div class="relative w-full max-w-4xl bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
+        <div class="relative w-full max-w-6xl bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
             <div class="absolute top-4 left-4 bg-white/90 px-3 py-1 rounded text-xs font-mono text-slate-500 pointer-events-none z-10 border border-slate-100">
                 Velocidad Onda (v): Constante
             </div>
-            <canvas id="dopplerCanvas" class="w-full h-64 md:h-96 block cursor-pointer bg-slate-50"></canvas>
+            <canvas id="simulatorCanvas" class="w-full h-64 md:h-96 block cursor-pointer bg-slate-50"></canvas>
             
             <!-- Instructions Overlay (fades out) -->
             <div id="instructionOverlay" class="absolute inset-0 flex items-center justify-center bg-black/60 transition-opacity duration-500 pointer-events-none z-20">
@@ -120,7 +256,7 @@
         </div>
 
         <!-- Controls Panel -->
-        <div class="w-full max-w-4xl mt-6 p-6 bg-white rounded-xl shadow-md border border-slate-200 flex flex-col gap-8">
+        <div class="w-full max-w-6xl mt-6 p-8 bg-white rounded-xl shadow-md border border-slate-200 flex flex-col gap-8">
             
             <!-- Velocidad Control -->
             <div>
@@ -165,84 +301,704 @@
         </div>
 
         <!-- Explanation Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl mt-8 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl mt-8 mb-8">
             
             <!-- Blue Shift Card -->
-            <div id="card-approach" class="bg-blue-50 p-6 rounded-xl border border-blue-100 transition-all duration-300 opacity-50">
-                <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div id="card-approach" class="bg-blue-50 p-8 rounded-xl border border-blue-100 transition-all duration-300 opacity-50">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white mr-4 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                         </svg>
                     </div>
                     <div>
-                        <h2 class="font-bold text-blue-800">Frente a la Fuente</h2>
-                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Acercamiento</span>
+                        <h2 class="font-bold text-blue-800 text-lg">Frente a la Fuente</h2>
+                        <span class="text-sm font-bold text-blue-600 uppercase tracking-wider">Acercamiento</span>
                     </div>
                 </div>
-                <div class="space-y-2 text-sm text-slate-700">
+                <div class="space-y-3 text-base text-slate-700">
                     <p>Las ondas se comprimen.</p>
                     <p>La frecuencia aumenta.</p>
-                    <p class="font-bold text-blue-700">Efecto: Sonido más agudo.</p>
+                    <p class="font-bold text-blue-700 text-lg">Efecto: Sonido más agudo.</p>
                 </div>
             </div>
 
             <!-- Red Shift Card -->
-            <div id="card-recede" class="bg-red-50 p-6 rounded-xl border border-red-100 transition-all duration-300 opacity-50">
-                <div class="flex items-center mb-3">
-                    <div class="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white mr-3 shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div id="card-recede" class="bg-red-50 p-8 rounded-xl border border-red-100 transition-all duration-300 opacity-50">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white mr-4 shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                         </svg>
                     </div>
                     <div>
-                        <h2 class="font-bold text-red-800">Detrás de la Fuente</h2>
-                        <span class="text-xs font-bold text-red-600 uppercase tracking-wider">Alejamiento</span>
+                        <h2 class="font-bold text-red-800 text-lg">Detrás de la Fuente</h2>
+                        <span class="text-sm font-bold text-red-600 uppercase tracking-wider">Alejamiento</span>
                     </div>
                 </div>
-                <div class="space-y-2 text-sm text-slate-700">
+                <div class="space-y-3 text-base text-slate-700">
                     <p>Las ondas se expanden.</p>
                     <p>La frecuencia disminuye.</p>
-                    <p class="font-bold text-red-700">Efecto: Sonido más grave.</p>
+                    <p class="font-bold text-red-700 text-lg">Efecto: Sonido más grave.</p>
                 </div>
             </div>
         </div>
 
-        <!-- Sonic Boom / Special Case Section -->
-        <section class="max-w-4xl w-full mx-auto p-6 md:p-8 bg-amber-50 text-slate-800 rounded-xl shadow-md border border-amber-200 mb-8">
-            <div class="flex flex-col gap-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-amber-700 mb-3">🚀 Caso Especial: La Barrera del Sonido</h2>
-                    <p class="text-slate-700 mb-4 leading-relaxed">
-                        ¿Qué pasa si la fuente se mueve <strong>igual o más rápido</strong> que la propia velocidad del sonido?
-                    </p>
-                    <ul class="space-y-3 text-sm text-slate-700">
-                        <li class="flex items-start gap-2">
-                            <span class="text-amber-500 text-xl">⚡</span>
-                            <div>
-                                <strong class="text-slate-900">Onda de Choque (Mach 1):</strong>
-                                <p class="opacity-90">Si la ambulancia viaja a la misma velocidad que el sonido, las ondas no pueden escapar hacia adelante y se acumulan creando una barrera de alta presión.</p>
-                            </div>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-amber-500 text-xl">💥</span>
-                            <div>
-                                <strong class="text-slate-900">Estallido Sónico (Supersónico):</strong>
-                                <p class="opacity-90">Si supera esa velocidad, deja las ondas atrás formando un cono (Cono de Mach). Escuchamos esto como una explosión o "boom" sónico al pasar.</p>
-                            </div>
-                        </li>
-                    </ul>
-                    <div class="mt-6 bg-white/80 p-4 rounded-lg border border-amber-200 shadow-sm">
-                        <p class="text-sm font-mono text-amber-800">
-                            💡 <strong>Pruébalo en el simulador:</strong> Mueve el deslizador de velocidad al máximo (extremo derecho o izquierdo) para ver cómo la ambulancia adelanta a sus propios círculos.
+        <!-- Sonic Boom / Special Case Section (Acordeón) -->
+        <section class="max-w-6xl w-full mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden mb-8">
+            <div class="p-6 flex items-center cursor-pointer hover:bg-slate-50 transition-colors gap-4" onclick="toggleBlock('caso-especial')">
+                <span id="icon-caso-especial" class="text-3xl font-bold text-amber-600 w-8 text-center flex-shrink-0">+</span>
+                <h2 class="text-xl md:text-2xl font-bold text-slate-800">🚀 Caso Especial: La Barrera del Sonido</h2>
+            </div>
+            
+            <div id="caso-especial" class="hidden border-t border-slate-200 p-6 md:p-8 bg-amber-50/30">
+                <div class="flex flex-col gap-6">
+                    <div>
+                        <p class="text-slate-700 mb-5 leading-relaxed text-base md:text-lg">
+                            ¿Qué pasa si la fuente se mueve <strong>igual o más rápido</strong> que la propia velocidad del sonido?
                         </p>
+                        <ul class="space-y-4 text-base text-slate-700">
+                            <li class="flex items-start gap-2">
+                                <span class="text-amber-500 text-xl">⚡</span>
+                                <div>
+                                    <strong class="text-slate-900">Onda de Choque (Mach 1):</strong>
+                                    <p class="opacity-90">Si la ambulancia viaja a la misma velocidad que el sonido, las ondas no pueden escapar hacia adelante y se acumulan creando una barrera de alta presión.</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-amber-500 text-xl">💥</span>
+                                <div>
+                                    <strong class="text-slate-900">Estallido Sónico (Supersónico):</strong>
+                                    <p class="opacity-90">Si supera esa velocidad, deja las ondas atrás formando un cono (Cono de Mach). Escuchamos esto como una explosión o "boom" sónico al pasar.</p>
+                                </div>
+                            </li>
+                        </ul>
+                        <div class="mt-6 bg-white/80 p-5 rounded-lg border border-amber-200 shadow-sm">
+                            <p class="text-base font-mono text-amber-800">
+                                💡 <strong>Pruébalo en el simulador:</strong> Mueve el deslizador de velocidad al máximo (extremo derecho o izquierdo) para ver cómo la ambulancia adelanta a sus propios círculos.
+                            </p>
+                        </div>
                     </div>
-                </div>
-                <div class="flex justify-center">
-                    <img src="barrera_delsonido.png" alt="Barrera del sonido" class="max-w-full h-auto rounded-lg shadow-md border border-amber-300">
+                    <div class="flex justify-center">
+                        <img src="barrera_delsonido.png" alt="Barrera del sonido" class="max-w-full h-auto rounded-lg shadow-md border border-amber-300">
+                    </div>
                 </div>
             </div>
         </section>
+
+        <!-- Título del Simulador 2 -->
+        <div class="w-full max-w-6xl mx-auto mb-6 mt-12">
+            <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Simulador 2: El delfín</h2>
+        </div>
+
+        <!-- Simulador 2: Sonar de Delfín -->
+        <div class="w-full max-w-6xl mx-auto mb-8">
+            <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200" style="position: relative; background-color: #001e36; min-height: 600px;">
+                <!-- UI Layer -->
+                <div id="dolphin-ui-layer" style="position: absolute; top: 20px; left: 0; width: 100%; text-align: center; pointer-events: none; z-index: 10;">
+                    <h3 style="margin: 0; font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); color: white;">Sonar de Delfín</h3>
+                    <p style="margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.8; color: white;">Arrastra la flecha 🔴 para apuntar el pez. Toca 🐬 para iniciar.</p>
+                </div>
+
+                <!-- Panel de Configuración -->
+                <div id="dolphin-settings" style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 8px 15px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2); z-index: 30; pointer-events: auto; display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: white;">
+                    <label for="dolphin-waveCount" style="color: white;">Ondas:</label>
+                    <input type="number" id="dolphin-waveCount" value="3" min="1" max="20" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.3); color: white; width: 50px; padding: 4px; border-radius: 4px; text-align: center; font-family: inherit;">
+                </div>
+
+                <!-- Barra de Herramientas -->
+                <div id="dolphin-toolbar" style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 50px; display: flex; gap: 30px; align-items: center; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 20; pointer-events: auto;">
+                    <div class="dolphin-tool" id="dolphin-rock-source" style="display: flex; flex-direction: column; align-items: center; cursor: grab; transition: transform 0.1s; width: 60px;">
+                        <div style="font-size: 2.5rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">🪨</div>
+                        <div style="font-size: 0.7rem; margin-top: 5px; opacity: 0.9; font-weight: bold; text-transform: uppercase; color: white;">Roca</div>
+                    </div>
+                    <div class="dolphin-tool" id="dolphin-fish-source" style="display: flex; flex-direction: column; align-items: center; cursor: grab; transition: transform 0.1s; width: 60px;">
+                        <div style="font-size: 2.5rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">🐟</div>
+                        <div style="font-size: 0.7rem; margin-top: 5px; opacity: 0.9; font-weight: bold; text-transform: uppercase; color: white;">Pez</div>
+                    </div>
+                    <div class="dolphin-tool" id="dolphin-shark-source" style="display: flex; flex-direction: column; align-items: center; cursor: grab; transition: transform 0.1s; width: 60px;">
+                        <div style="font-size: 2.5rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">🦈</div>
+                        <div style="font-size: 0.7rem; margin-top: 5px; opacity: 0.9; font-weight: bold; text-transform: uppercase; color: white;">Tiburón</div>
+                    </div>
+                    <div class="dolphin-tool" id="dolphin-trash-can" style="display: flex; flex-direction: column; align-items: center; cursor: grab; transition: transform 0.1s; width: 60px;">
+                        <div style="font-size: 2.5rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">🗑️</div>
+                        <div style="font-size: 0.7rem; margin-top: 5px; opacity: 0.9; font-weight: bold; text-transform: uppercase; color: white;">Borrar</div>
+                    </div>
+                </div>
+
+                <canvas id="dolphinCanvas" style="display: block; width: 100%; height: 600px;"></canvas>
+            </div>
+        </div>
+
+        </div>
+        <!-- FIN SECCIÓN: CONTEXTO -->
+    </div>
+    <!-- FIN CONTENIDO SIMULADOR -->
+
+    <!-- Contenido Principal para "En Profundidad" (Oculto inicialmente) -->
+    <main id="main-content" class="hidden flex-grow flex flex-col items-center justify-start pt-24 px-4 pb-12 relative z-10 bg-white min-h-screen">
+
+        <!-- SECCIÓN: EN PROFUNDIDAD -->
+        <div id="section-profundidad" class="w-full hidden">
+        
+        <div class="max-w-6xl w-full mx-auto space-y-4">
+        
+        <!-- BLOQUE 1: Definición, descubrimiento y fundamentos teóricos -->
+        <section class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="p-6 flex items-center cursor-pointer hover:bg-slate-50 transition-colors gap-4" onclick="toggleBlock('bloque1')">
+                <span id="icon-bloque1" class="text-3xl font-bold text-blue-600 w-8 text-center flex-shrink-0">+</span>
+                <h2 class="text-xl md:text-2xl font-bold text-slate-800">BLOQUE 1: Definición, descubrimiento y fundamentos teóricos</h2>
+            </div>
+            
+            <div id="bloque1" class="hidden border-t border-slate-200 p-6 md:p-8 bg-slate-50/30">
+                <div class="space-y-8">
+                <!-- 1.1 ¿Qué es el Efecto Doppler? -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">1.1. ¿Qué es el Efecto Doppler?</h3>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        El Efecto Doppler es un fenómeno físico fundamental definido como la variación en la frecuencia percibida de cualquier tipo de onda (sonora, electromagnética o gravitacional), cuando existe un movimiento relativo entre la fuente emisora y el observador. Este principio, formalizado por Christian Doppler en 1842, es una manifestación directa de la velocidad relativa.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed">
+                        La naturaleza de esta variación se entiende conceptualmente mediante la compresión o estiramiento de las longitudes de onda. Cuando la fuente se acerca, las crestas de la onda se emiten más cerca, aumentando la frecuencia (desplazamiento positivo). Cuando se aleja, la longitud de onda efectiva aumenta, reduciendo la frecuencia (desplazamiento negativo). Para ondas acústicas, este cambio se manifiesta en el tono: más agudo al acercarse y más grave al alejarse.
+                    </p>
+                </div>
+
+                <!-- 1.2 Descubrimiento -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">1.2. Descubrimiento</h3>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        El matemático y físico austriaco Christian Andreas Doppler nació en Salzburgo el 29 de noviembre de 1803, aunque su carrera la desarrolló en las universidades de Praga y Viena.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        Tras mucho tiempo observando la naturaleza, presentó la idea en un congreso de ciencias naturales que se celebró en Praga en 1842. En 1845, el científico neerlandés Christoph H.D. Ballot confirmó el principio de Doppler durante un trayecto en tren, un experimento que Doppler realizó también poco después. Colocó una orquesta en un ferrocarril e indicó que tocara la misma nota musical mientras que otro grupo de músicos, en la estación, registraba esa nota que oían mientras el tren se acercaba y alejaba de ellos. Una idea engorrosa, pero brillante para demostrar el efecto.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed">
+                        Su carrera como profesor en la Universidad de Praga, donde sus estudiantes le llegaron a acusar de ser demasiado duro, se interrumpió por la revolución de 1848. Doppler tuvo que trasladarse a Viena, ya con una salud delicada. Pocos años después, el 17 de marzo de 1853, falleció de una enfermedad pulmonar mientras intentaba recuperarse en la ciudad de Venecia.
+                    </p>
+                </div>
+
+                <!-- 1.3 Fundamentos teóricos -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">1.3. Fundamentos teóricos</h3>
+                    <div class="bg-slate-50 p-6 rounded-lg border border-slate-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3 text-lg">Ecuación general del efecto Doppler</h4>
+                        <div class="text-center bg-white p-6 rounded border border-slate-100 shadow-inner mb-4">
+                            <p class="font-serif text-2xl md:text-3xl text-blue-700 italic">
+                                f' = f · <span class="inline-block align-middle text-xl mx-1">(</span><span class="inline-flex flex-col align-middle text-center text-base leading-tight border-b border-black">v ± v<sub>R</sub></span><span class="inline-flex flex-col align-middle text-center text-base leading-tight">v ∓ v<sub>F</sub></span><span class="inline-block align-middle text-xl mx-1">)</span>
+                            </p>
+                        </div>
+                        <div class="space-y-2 text-sm text-slate-600">
+                            <p><strong class="text-slate-700">f', f:</strong> Frecuencia percibida por el receptor y frecuencia emitida por el foco respectivamente. Su unidad de medida en el Sistema Internacional (S.I.) es el hertzio (Hz), que es la unidad inversa del segundo (1 Hz = 1 s⁻¹)</p>
+                            <p><strong class="text-slate-700">v:</strong> Velocidad de propagación de la onda en el medio. Es constante y depende de las características del medio. Se relaciona con la longitud de onda y la frecuencia según v = λ·f. Su unidad de medida en el S.I. es el metro por segundo (m/s)</p>
+                            <p><strong class="text-slate-700">v<sub>R</sub>, v<sub>F</sub>:</strong> Velocidad del receptor y del emisor (foco) respectivamente. Ambas se suponen menor que v. Su unidad de medida en el S.I. es el m/s</p>
+                            <p><strong class="text-slate-700">±, ∓:</strong> Utilizaremos el signo + :</p>
+                            <ul class="list-disc list-inside ml-4 space-y-1">
+                                <li>En el numerador si el receptor se acerca al emisor</li>
+                                <li>En el denominador si el emisor se aleja del receptor</li>
+                            </ul>
+                            <p><strong class="text-slate-700">Utilizaremos el signo - :</strong></p>
+                            <ul class="list-disc list-inside ml-4 space-y-1">
+                                <li>En el numerador si el receptor se aleja del emisor</li>
+                                <li>En el denominador si el emisor se acerca al receptor</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <p class="text-slate-600 leading-relaxed mb-4">
+                        Solo utilizando esta expresión se puede llegar a las demás expresiones, dependiendo de si el receptor o el foco están en movimiento o en reposo, y si se acercan o se alejan:
+                    </p>
+                    <div class="flex justify-center mb-4">
+                        <img src="figura1.png" alt="Casos del efecto Doppler" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                    </div>
+                    <p class="text-slate-600 leading-relaxed">
+                        En un último caso, si ambos están en reposo, las velocidades se anularían y las frecuencias serían idénticas, provocando que no se produzca el Efecto Doppler.
+                    </p>
+                </div>
+                </div> <!-- Cierre del div space-y-8 -->
+            </div> <!-- Cierre del contenido colapsable -->
+        </section>
+
+        <!-- BLOQUE 2: Tipos de ondas -->
+        <section class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="p-6 flex items-center cursor-pointer hover:bg-slate-50 transition-colors gap-4" onclick="toggleBlock('bloque2')">
+                <span id="icon-bloque2" class="text-3xl font-bold text-blue-600 w-8 text-center flex-shrink-0">+</span>
+                <h2 class="text-xl md:text-2xl font-bold text-slate-800">BLOQUE 2: Tipos de ondas</h2>
+            </div>
+
+            <div id="bloque2" class="hidden border-t border-slate-200 p-6 md:p-8 bg-slate-50/30">
+            <div class="space-y-8">
+                <!-- 2.1 Ondas mecánicas -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">2.1. Ondas mecánicas</h3>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        Es el caso clásico que experimentamos a diario. Las ondas mecánicas necesitan un medio (aire, agua, metal) para viajar.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        El efecto Doppler depende de las velocidades de la fuente y del observador con respecto al medio.
+                    </p>
+                    <ul class="list-disc list-inside ml-4 space-y-2 text-slate-600">
+                        <li>Si el foco se acerca, "empuja" las ondas de aire frente a ella, comprimiéndolas (frecuencia más alta / sonido agudo).</li>
+                        <li>Si se aleja, las ondas se "estiran" detrás de ella (frecuencia más baja / sonido grave).</li>
+                    </ul>
+                    <p class="text-slate-600 leading-relaxed mt-3">
+                        No es lo mismo que la fuente se mueva hacia ti a que tú te muevas hacia la fuente, porque el viento o el movimiento del aire (el medio) afecta la ecuación.
+                    </p>
+                </div>
+
+                <!-- 2.2 Ondas electromagnéticas -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">2.2. Ondas electromagnéticas</h3>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        A diferencia del sonido, la luz no necesita un medio (viaja en el vacío). Por tanto, aquí no existe un viento contra el cual medir la velocidad.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        <strong>Cómo funciona:</strong> Solo importa la velocidad relativa entre la fuente y el observador. Se aplica el Efecto Doppler Relativista, que tiene en cuenta la dilatación del tiempo de la Teoría de la Relatividad Especial.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed mb-2"><strong>Observación:</strong></p>
+                    <ul class="list-disc list-inside ml-4 space-y-2 text-slate-600">
+                        <li><strong>Acercamiento:</strong> La luz se vuelve "más azul" (Blueshift).</li>
+                        <li><strong>Alejamiento:</strong> La luz se vuelve "más roja" (Redshift).</li>
+                    </ul>
+                    <p class="text-slate-600 leading-relaxed mt-3">
+                        Este fenómeno es la herramienta principal que usan los astrónomos para saber a qué velocidad se alejan las galaxias (expansión del universo).
+                    </p>
+                </div>
+
+                <!-- 2.3 Ondas gravitacionales -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">2.3. Ondas gravitacionales</h3>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        Las ondas gravitacionales son "ondulaciones" en el propio tejido del espacio-tiempo que viajan a la velocidad de la luz (c).
+                    </p>
+                    <p class="text-slate-600 leading-relaxed mb-3">
+                        <strong>Cómo funciona:</strong> Sí, sufren efecto Doppler. Si dos agujeros negros que orbitan entre sí (la fuente) se mueven hacia la Tierra mientras emiten estas ondas, la frecuencia de las ondas gravitacionales que detectamos será mayor (llegarán más "comprimidas") que si el sistema se estuviera alejando.
+                    </p>
+                    <p class="text-slate-600 leading-relaxed">
+                        <strong>Matiz importante:</strong> Al igual que con la luz, se aplica el tratamiento relativista. Dado que viajan en el vacío a la velocidad de la luz, el comportamiento es análogo al de las ondas electromagnéticas: si la fuente de ondas gravitacionales se aleja rápidamente, la señal detectada en lugares como LIGO tendrá una longitud de onda más larga (estirada).
+                    </p>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- BLOQUE 3: Aplicaciones -->
+        <section class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="p-6 flex items-center cursor-pointer hover:bg-slate-50 transition-colors gap-4" onclick="toggleBlock('bloque3')">
+                <span id="icon-bloque3" class="text-3xl font-bold text-blue-600 w-8 text-center flex-shrink-0">+</span>
+                <h2 class="text-xl md:text-2xl font-bold text-slate-800">BLOQUE 3: Aplicaciones</h2>
+            </div>
+            
+            <div id="bloque3" class="hidden border-t border-slate-200 p-6 md:p-8 bg-slate-50/30">
+            <div class="space-y-12">
+                <!-- 3.1 El ADCP -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.1. El ADCP (Perfilador de Corriente Acústico Doppler)</h3>
+                    
+                    <div class="bg-blue-50 p-5 rounded-lg border border-blue-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            El ADCP es el instrumento estándar en la oceanografía moderna para medir la velocidad de las corrientes marinas a diferentes profundidades. Su funcionamiento no mide la velocidad del agua per se, sino la velocidad de las partículas en suspensión (plancton, sedimentos…) que se desplazan pasivamente con la corriente.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed">
+                            El transductor emite pulsos de sonido de alta frecuencia (pings) hacia la columna de agua. Estas ondas sonoras rebotan en las partículas ("dispersores acústicos") y regresan al instrumento. Debido al movimiento relativo de las partículas respecto al ADCP, la frecuencia del eco recibido es distinta a la emitida. Analizando este cambio de frecuencia (Doppler Shift) y el tiempo de retorno, el equipo calcula la velocidad y dirección de la corriente a distintas profundidades (celdas).
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <div class="flex justify-center mb-2">
+                            <img src="figura2.png" alt="Esquema de funcionamiento del ADCP" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 1. Esquema de funcionamiento de un ADCP montado en buque. Los haces acústicos miden la velocidad radial de las partículas en suspensión en diferentes celdas de profundidad.
+                        </p>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-4 mb-4">
+                        <div class="flex justify-center">
+                            <img src="figura3.png" alt="Perfil de velocidad - Río Huallaga" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <div class="flex justify-center">
+                            <img src="figura4.png" alt="Perfil de velocidad - Río Huallaga" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Para este caso, consideramos que tanto la fuente (el transductor) como el observador son el mismo equipo, pero el "blanco" (la partícula) se mueve. Al ser un viaje de ida y vuelta, el efecto Doppler se duplica.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            La fórmula que rige el funcionamiento del ADCP es:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                F<sub>Doppler</sub> = 2 × f<sub>0</sub> × v/c × cos(θ)
+                            </p>
+                        </div>
+                        <div class="space-y-1 text-sm text-slate-600">
+                            <p><strong class="text-slate-700">F<sub>Doppler</sub>:</strong> Cambio en la frecuencia (Frecuencia recibida - Frecuencia emitida).</p>
+                            <p><strong class="text-slate-700">f<sub>0</sub>:</strong> Frecuencia emitida.</p>
+                            <p><strong class="text-slate-700">v:</strong> Velocidad relativa de la corriente (partículas).</p>
+                            <p><strong class="text-slate-700">c:</strong> Velocidad del sonido en el agua (aprox. 1500 m/s).</p>
+                            <p><strong class="text-slate-700">θ:</strong> Ángulo del haz respecto a la vertical (importante en ADCP).</p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mt-3 text-sm">
+                            <strong>Nota:</strong> El término θ es crucial porque el ADCP mide la componente de velocidad proyectada a lo largo del haz de sonido.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 3.2 Medicina - Ecografía Doppler -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.2. Medicina - Ecografía Doppler</h3>
+                    <p class="text-slate-600 mb-3 italic">Aplicación en fluidos biológicos.</p>
+                    
+                    <div class="bg-green-50 p-5 rounded-lg border border-green-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed">
+                            En medicina, el efecto Doppler se utiliza para evaluar el flujo sanguíneo de manera no invasiva. El transductor de ultrasonidos emite ondas que atraviesan los tejidos y rebotan en los glóbulos rojos (eritrocitos) que circulan por los vasos sanguíneos.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mt-3">
+                            Dependiendo de la dirección del flujo, la frecuencia cambia. Los equipos modernos utilizan el Doppler Color, donde se asigna un código de colores arbitrario (generalmente azul y rojo) para indicar la dirección y velocidad del flujo respecto a la sonda, permitiendo detectar obstrucciones, estenosis o insuficiencias valvulares.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <div class="flex justify-center mb-2">
+                            <img src="figura5.png" alt="Ecografía Doppler Color" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <p class="text-slate-600 text-sm mb-2">
+                            El color rojo codifica el flujo que se acerca al transductor y el azul, el que se aleja del transductor. Mientras más brillante es el color, mayor es la velocidad
+                        </p>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 2. Ecografía Doppler de la arteria carótida. El código de color representa la velocidad y dirección del flujo sanguíneo respecto al transductor. (¡ojo! no confundir con el Redshift astronómico, aquí son colores asignados por software).
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Podéis usar la fórmula general para una fuente en movimiento y un observador en reposo (el transductor), considerando el ángulo de insonación:
+                        </p>
+                        <div class="space-y-2 mb-3">
+                            <div class="text-center bg-white p-3 rounded border border-slate-100 shadow-inner">
+                                <p class="font-serif text-lg text-blue-700 italic">
+                                    f<sub>r</sub> = f<sub>e</sub> (c/(c - v<sub>s</sub> × cosθ))
+                                </p>
+                            </div>
+                            <div class="text-center bg-white p-3 rounded border border-slate-100 shadow-inner">
+                                <p class="font-serif text-lg text-blue-700 italic">
+                                    v = (Δf × c)/(2 × f<sub>0</sub> × cosθ)
+                                </p>
+                            </div>
+                        </div>
+                        <div class="space-y-1 text-sm text-slate-600">
+                            <p><strong class="text-slate-700">Δf:</strong> Diferencia entre frecuencia recibida y emitida (f<sub>r</sub> - f<sub>e</sub>).</p>
+                            <p><strong class="text-slate-700">c:</strong> Velocidad del sonido en tejido humano (1540 m/s).</p>
+                            <p><strong class="text-slate-700">θ:</strong> Ángulo de insonación (ángulo entre el haz de ultrasonido y el vaso sanguíneo).</p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mt-3 text-sm">
+                            Si el ángulo θ es de 90 grados, no hay efecto Doppler (el coseno es 0). Por eso los médicos inclinan la sonda.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 3.3 Astrofísica - Redshift y Blueshift -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.3. Astrofísica - Redshift y Blueshift</h3>
+                    <p class="text-slate-600 mb-3 italic">La evidencia de la expansión del universo.</p>
+                    
+                    <div class="bg-purple-50 p-5 rounded-lg border border-purple-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            El efecto Doppler en la luz es la herramienta principal para estudiar la dinámica del universo. Cuando una fuente luminosa (como una galaxia) se aleja de la Tierra, las ondas de luz se "estiran" al llegar a nosotros, aumentando su longitud de onda hacia la parte roja del espectro.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed">
+                            Este fenómeno permitió a Edwin Hubble demostrar que el universo se está expandiendo. Al analizar la luz de galaxias lejanas, observamos que las líneas espectrales (la "huella dactilar" química de las estrellas) no están donde deberían, sino desplazadas hacia la derecha (el rojo).
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <div class="flex justify-center mb-2">
+                            <img src="figura6.png" alt="Comparación de espectros de absorción" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 3. Espectroscopía comparada. Arriba: Espectro de referencia en reposo. Abajo: Espectro corrido al rojo (Redshift) indicando que la fuente se aleja a gran velocidad.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático (Relativista):</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            En astronomía, las velocidades de recesión pueden ser muy altas, cercanas a la velocidad de la luz (c). Por ello, se debe usar la fórmula relativista. Se utiliza el parámetro z (desplazamiento al rojo):
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                1 + z = √((1 + v/c)/(1 - v/c))
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed">
+                            Para velocidades mucho menores que la luz v << c, la fórmula se simplifica a la relación lineal clásica:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mt-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                Δλ/λ<sub>0</sub> ≈ v/c
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3.4 Radares de Tráfico -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.4. Radares de Tráfico</h3>
+                    <p class="text-slate-600 mb-3 italic">Aplicación tecnológica cotidiana (Microondas).</p>
+                    
+                    <div class="bg-amber-50 p-5 rounded-lg border border-amber-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed">
+                            Los radares de tráfico funcionan emitiendo ondas de radio o microondas a una frecuencia precisa. Cuando estas ondas golpean un vehículo en movimiento, se reflejan de vuelta al radar. Como el vehículo se mueve hacia el radar (o se aleja), las ondas reflejadas se comprimen (o se estiran), cambiando su frecuencia.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mt-3">
+                            El radar mezcla la frecuencia emitida con la recibida para obtener una "frecuencia de batido", que es proporcional a la velocidad del coche. Es un sistema de alta precisión que permite medir velocidades instantáneas.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <div class="flex justify-center mb-2">
+                            <img src="figura7.png" alt="Diagrama de lóbulos de radiación del radar" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 4. Principio de funcionamiento del radar Doppler. El vehículo actúa como fuente móvil al reflejar las ondas, comprimiendo los frentes de onda en la dirección del radar.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            <strong>Primer Doppler:</strong> Radar → Coche
+                        </p>
+                        <div class="text-center bg-white p-3 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-lg text-blue-700 italic">
+                                f<sub>1</sub> = f<sub>0</sub> (1 + v/c) Frecuencia que recibe el coche
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            <strong>Segundo Doppler:</strong> Coche → Radar
+                        </p>
+                        <div class="text-center bg-white p-3 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-lg text-blue-700 italic">
+                                f<sub>2</sub> = f<sub>1</sub> (1 + v/c) Frecuencia que vuelve al radar
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Aunque usamos ondas electromagnéticas, la velocidad de un coche es insignificante comparada con la de la luz (c), por lo que no usamos relatividad. La fórmula para calcular la velocidad del vehículo (v) es:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                v = (Δf × c)/(2 × f<sub>e</sub>)
+                            </p>
+                        </div>
+                        <div class="space-y-1 text-sm text-slate-600">
+                            <p><strong class="text-slate-700">Δf:</strong> Cambio de frecuencia detectado por el radar.</p>
+                            <p><strong class="text-slate-700">c:</strong> Velocidad de la luz.</p>
+                            <p><strong class="text-slate-700">f<sub>e</sub>:</strong> Frecuencia de operación del radar (por ejemplo, Banda K a 24 GHz).</p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mt-3 text-sm">
+                            El factor 2 aparece nuevamente por ser un viaje de ida y vuelta (reflexión).
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 3.5 Ecolocalización Dinámica en animales -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.5. Ecolocalización Dinámica en animales</h3>
+                    
+                    <div class="bg-teal-50 p-5 rounded-lg border border-teal-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            La ecolocalización es un sonar biológico. Animales como los murciélagos o los odontocetos (delfines, cachalotes) emiten sonidos para navegar y cazar. Sin embargo, el Efecto Doppler juega un papel vital en la caza.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            No les basta con saber dónde está la presa (que se calcula por el tiempo que tarda el eco en volver), necesitan saber hacia dónde va y a qué velocidad.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Cuando el sonido rebota en una presa en movimiento (como una polilla o un banco de peces), el eco regresa con una frecuencia modificada.
+                        </p>
+                        <ul class="list-disc list-inside ml-4 space-y-1 text-slate-700">
+                            <li>Si la presa se aleja, el eco vuelve más grave (menor frecuencia).</li>
+                            <li>Si la presa se acerca, el eco vuelve más agudo (mayor frecuencia).</li>
+                        </ul>
+                        <p class="text-slate-700 leading-relaxed mt-3 text-sm italic">
+                            <strong>Dato Curioso Académico:</strong> Algunos murciélagos poseen una "fóvea acústica" en su cerebro sintonizada a una frecuencia exacta. Son capaces de ajustar la frecuencia de su grito a la baja mientras vuelan hacia la presa, para que el eco (que vuelve más agudo por el Doppler) caiga exactamente en su rango auditivo óptimo. Esto se llama Compensación de Desplazamiento Doppler.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <div class="flex justify-center mb-2">
+                            <img src="figura8.png" alt="Diagrama de caza - Ecolocalización Doppler" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300">
+                        </div>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 5. Ecolocalización Doppler. La compresión de las ondas reflejadas permite al depredador calcular la velocidad relativa de la presa antes del impacto.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            En este escenario, tanto el emisor (depredador) como el receptor (el mismo depredador escuchando el eco) y el objeto reflector (presa) pueden estar en movimiento.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            La fórmula general para la frecuencia del eco (f<sub>eco</sub>) percibido por el depredador es:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                f<sub>eco</sub> = f<sub>emitida</sub> ((c + v<sub>depredador</sub>)/(c - v<sub>presa</sub>))
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mb-3 text-sm">
+                            <strong>Nota:</strong> Los signos dependen de si se acercan (+) o se alejan (-). Asumiendo que ambos se acercan de frente:
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            A partir de esta fórmula se puede calcular la velocidad relativa de acercamiento:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                Δf = (2 × v<sub>rel</sub> × f<sub>emitida</sub>)/c
+                            </p>
+                        </div>
+                        <div class="space-y-1 text-sm text-slate-600">
+                            <p><strong class="text-slate-700">Δf:</strong> Cambio de frecuencia percibido.</p>
+                            <p><strong class="text-slate-700">c:</strong> Velocidad del sonido (agua ≈ 1500 m/s).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3.6 Astrofísica: Detección de Compañeros Invisibles -->
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-700 mb-4">3.6. Astrofísica: Detección de Compañeros Invisibles (Estrellas Binarias Espectroscópicas)</h3>
+                    
+                    <div class="bg-indigo-50 p-5 rounded-lg border border-indigo-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Teoría:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Muchas estrellas que vemos como un único punto de luz son en realidad sistemas binarios (dos estrellas) orbitando un centro de masas común. A veces, una de las estrellas es muy tenue o incluso invisible (un agujero negro o un exoplaneta).
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            ¿Cómo sabemos que hay dos? Por el "bamboleo" de la estrella visible.
+                        </p>
+                        <p class="text-slate-700 leading-relaxed">
+                            A medida que la estrella visible orbita, durante la mitad de su órbita se aleja de la Tierra y durante la otra mitad se acerca. Esto provoca que sus líneas espectrales oscilen periódicamente hacia el rojo y hacia el azul. Este método, conocido como Velocidad Radial, es también el principal método histórico para descubrir exoplanetas.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-50 p-5 rounded-lg border border-slate-200 mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Desarrollo Matemático:</h4>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Lo que medimos aquí es la Velocidad Radial (v<sub>r</sub>) de la estrella visible en función del tiempo. La variación máxima de la longitud de onda nos da la velocidad orbital máxima (K).
+                        </p>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Partiendo de la fórmula Doppler clásica:
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-xl text-blue-700 italic">
+                                v<sub>r</sub> = c × Δλ/λ<sub>0</sub>
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed mb-3">
+                            Al graficar esta velocidad frente al tiempo, obtenemos una curva senoidal. Si aplicamos las Leyes de Kepler y la conservación del momento, podemos deducir la masa del "compañero invisible" (M<sub>2</sub>):
+                        </p>
+                        <div class="text-center bg-white p-4 rounded border border-slate-100 shadow-inner mb-3">
+                            <p class="font-serif text-lg text-blue-700 italic">
+                                (M<sub>2</sub>³ sin³ i)/(M<sub>1</sub> + M<sub>2</sub>)² = (P K³)/(2πG)
+                            </p>
+                        </div>
+                        <p class="text-slate-700 leading-relaxed text-sm italic">
+                            Nota para el portfolio: Quizás esta última fórmula sea demasiado compleja. La primera y explicar que v<sub>r</sub> varía cíclicamente.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h4 class="font-bold text-slate-800 mb-3">Visualización:</h4>
+                        <p class="text-slate-600 text-sm mb-3">
+                            <strong>Binary Star System Animation</strong>
+                        </p>
+                        <p class="text-slate-600 text-sm mb-3">
+                            <strong>Curva de Velocidad Radial:</strong>
+                        </p>
+                        <p class="text-slate-600 text-sm mb-3">
+                            Este gráfico es la evidencia científica por excelencia.
+                        </p>
+                        <ul class="list-disc list-inside ml-4 space-y-1 text-sm text-slate-600 mb-3">
+                            <li><strong>Eje X:</strong> Tiempo (Días/Años).</li>
+                            <li><strong>Eje Y:</strong> Velocidad Radial (km/s). Positivo (Alejándose/Rojo), Negativo (Acercándose/Azul).</li>
+                            <li><strong>Gráfico:</strong> Una onda senoidal perfecta.</li>
+                        </ul>
+                        <p class="text-slate-600 text-sm mb-2">
+                            Esquema adjunto: Encima del gráfico, poned 4 posiciones de la órbita de la estrella correspondiente a los puntos clave de la onda (cima, valle y cruces por cero).
+                        </p>
+                        <p class="text-xs text-slate-500 italic text-center">
+                            Fig 6. Curva de velocidad radial de una estrella binaria espectroscópica. La oscilación periódica entre corrimiento al rojo y al azul revela la influencia gravitatoria de un compañero invisible orbitante.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Tabla comparativa -->
+                <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-slate-800 mb-4 text-lg">Tabla Comparativa de Aplicaciones</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-slate-300 bg-white text-sm">
+                            <thead>
+                                <tr class="bg-blue-100">
+                                    <th class="border border-slate-300 px-4 py-2 text-left font-bold">Caso</th>
+                                    <th class="border border-slate-300 px-4 py-2 text-left font-bold">Tipo de Onda</th>
+                                    <th class="border border-slate-300 px-4 py-2 text-left font-bold">Medio</th>
+                                    <th class="border border-slate-300 px-4 py-2 text-left font-bold">¿Qué se mueve?</th>
+                                    <th class="border border-slate-300 px-4 py-2 text-left font-bold">Variable clave medida</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="border border-slate-300 px-4 py-2">ADCP</td>
+                                    <td class="border border-slate-300 px-4 py-2">Mecánica (Sonido)</td>
+                                    <td class="border border-slate-300 px-4 py-2">Agua de mar</td>
+                                    <td class="border border-slate-300 px-4 py-2">Partículas</td>
+                                    <td class="border border-slate-300 px-4 py-2">Velocidad de corriente</td>
+                                </tr>
+                                <tr class="bg-slate-50">
+                                    <td class="border border-slate-300 px-4 py-2">Ecografía</td>
+                                    <td class="border border-slate-300 px-4 py-2">Mecánica (Ultrasonido)</td>
+                                    <td class="border border-slate-300 px-4 py-2">Tejido/Sangre</td>
+                                    <td class="border border-slate-300 px-4 py-2">Glóbulos rojos</td>
+                                    <td class="border border-slate-300 px-4 py-2">Flujo sanguíneo</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-slate-300 px-4 py-2">Astronomía</td>
+                                    <td class="border border-slate-300 px-4 py-2">Electromagnética (Luz)</td>
+                                    <td class="border border-slate-300 px-4 py-2">Vacío</td>
+                                    <td class="border border-slate-300 px-4 py-2">Galaxias/Estrellas</td>
+                                    <td class="border border-slate-300 px-4 py-2">Velocidad de recesión</td>
+                                </tr>
+                                <tr class="bg-slate-50">
+                                    <td class="border border-slate-300 px-4 py-2">Radar</td>
+                                    <td class="border border-slate-300 px-4 py-2">Electromagnética (Radio)</td>
+                                    <td class="border border-slate-300 px-4 py-2">Aire</td>
+                                    <td class="border border-slate-300 px-4 py-2">Vehículos</td>
+                                    <td class="border border-slate-300 px-4 py-2">Velocidad del coche</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        </div>
+        </div>
+        <!-- FIN SECCIÓN: EN PROFUNDIDAD -->
 
     </main>
 
@@ -252,20 +1008,32 @@
     </footer>
 
     <script>
-        // Setup Canvas
-        const canvas = document.getElementById('dopplerCanvas');
-        const ctx = canvas.getContext('2d');
+        // Setup Canvas - Verificar que existe antes de usarlo
+        let canvas, ctx;
         
-        // UI Elements
-        const velocitySlider = document.getElementById('velocitySlider');
-        const freqSlider = document.getElementById('freqSlider');
-        const speedValueDisplay = document.getElementById('speedValue');
-        const freqValueDisplay = document.getElementById('freqValue');
-        const overlay = document.getElementById('instructionOverlay');
-        const cardApproach = document.getElementById('card-approach');
-        const cardRecede = document.getElementById('card-recede');
-        const audioToggle = document.getElementById('audioToggle');
-        const audioButtonText = document.getElementById('audioButtonText');
+        function initSimulator() {
+            canvas = document.getElementById('simulatorCanvas');
+            if (!canvas) {
+                console.error('Canvas no encontrado');
+                return;
+            }
+            ctx = canvas.getContext('2d');
+        
+            // UI Elements - Verificar que existan
+            const velocitySlider = document.getElementById('velocitySlider');
+            const freqSlider = document.getElementById('freqSlider');
+            const speedValueDisplay = document.getElementById('speedValue');
+            const freqValueDisplay = document.getElementById('freqValue');
+            const overlay = document.getElementById('instructionOverlay');
+            const cardApproach = document.getElementById('card-approach');
+            const cardRecede = document.getElementById('card-recede');
+            const audioToggle = document.getElementById('audioToggle');
+            const audioButtonText = document.getElementById('audioButtonText');
+            
+            if (!velocitySlider || !freqSlider || !speedValueDisplay || !freqValueDisplay) {
+                console.error('Elementos del simulador no encontrados');
+                return;
+            }
 
         // State
         let width, height;
@@ -284,10 +1052,17 @@
         
         // Audio variables
         let audioContext = null;
-        let oscillator = null;
+        let oscillator1 = null; // Primer oscilador de la sirena
+        let oscillator2 = null; // Segundo oscilador de la sirena
         let gainNode = null;
         let isAudioPlaying = false;
+        let currentFrequency = 440; // Frecuencia actual
+        let targetFrequency = 440; // Frecuencia objetivo
         const baseFrequency = 440; // Frecuencia base en Hz (La4)
+        const sirenFrequency1 = 440; // Frecuencia del primer tono de la sirena
+        const sirenFrequency2 = 554; // Frecuencia del segundo tono de la sirena (aproximadamente Mi5)
+        const sirenSpeed = 3; // Velocidad de alternancia de la sirena (ciclos por segundo)
+        let sirenPhase = 0; // Fase de la sirena
         const observerX = 0; // Se calculará dinámicamente (centro)
         let observerY = 0; // Se calculará dinámicamente (un poco más abajo)
 
@@ -309,61 +1084,67 @@
             }
         }
 
-        window.addEventListener('resize', resize);
-        resize();
+            window.addEventListener('resize', resize);
+            resize();
 
-        // Interaction Logic: Velocity
-        velocitySlider.addEventListener('input', (e) => {
-            sourceSpeed = parseFloat(e.target.value);
-            // Convertir a Mach: 3.0x = 1 Mach
-            const machValue = sourceSpeed / 3.0;
-            speedValueDisplay.innerText = machValue.toFixed(2) + ' Mach';
-            overlay.style.opacity = '0';
-            updateCards(sourceSpeed);
-        });
-
-        // Interaction Logic: Frequency
-        freqSlider.addEventListener('input', (e) => {
-            // Map slider (5 to 60) to delay frames.
-            // High slider value = High Frequency = Low Delay
-            // Let's invert it:
-            const val = parseInt(e.target.value);
-            emissionDelay = Math.max(5, 65 - val); // Simple inversion mapping
-            
-            // Update Text label
-            if(val < 20) freqValueDisplay.innerText = "Baja";
-            else if(val > 45) freqValueDisplay.innerText = "Alta";
-            else freqValueDisplay.innerText = "Media";
-            
-            overlay.style.opacity = '0';
-        });
-
-        function updateCards(speed) {
-            // Reset transparencies
-            if (Math.abs(speed) < 0.2) {
-                cardApproach.style.opacity = '0.5';
-                cardRecede.style.opacity = '0.5';
-                cardApproach.classList.remove('ring-2', 'ring-blue-400', 'shadow-lg');
-                cardRecede.classList.remove('ring-2', 'ring-red-400', 'shadow-lg');
-                return;
+            // Interaction Logic: Velocity
+            if (velocitySlider) {
+                velocitySlider.addEventListener('input', (e) => {
+                    sourceSpeed = parseFloat(e.target.value);
+                    // Convertir a Mach: 3.0x = 1 Mach
+                    const machValue = sourceSpeed / 3.0;
+                    speedValueDisplay.innerText = machValue.toFixed(2) + ' Mach';
+                    if (overlay) overlay.style.opacity = '0';
+                    updateCards(sourceSpeed);
+                });
             }
 
-            // Always highlight both when moving, because both effects happen simultaneously 
-            // relative to observers on either side
-            cardApproach.style.opacity = '1';
-            cardRecede.style.opacity = '1';
-            
-            if (speed > 0) {
-                // Moving Right: Right side approaches, Left side recedes
-                // We just highlight the cards to show the effect exists
-                cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
-                cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
-            } else {
-                // Moving Left
-                cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
-                cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
+            // Interaction Logic: Frequency
+            if (freqSlider) {
+                freqSlider.addEventListener('input', (e) => {
+                    // Map slider (5 to 60) to delay frames.
+                    // High slider value = High Frequency = Low Delay
+                    // Let's invert it:
+                    const val = parseInt(e.target.value);
+                    emissionDelay = Math.max(5, 65 - val); // Simple inversion mapping
+                    
+                    // Update Text label
+                    if(val < 20) freqValueDisplay.innerText = "Baja";
+                    else if(val > 45) freqValueDisplay.innerText = "Alta";
+                    else freqValueDisplay.innerText = "Media";
+                    
+                    if (overlay) overlay.style.opacity = '0';
+                });
             }
-        }
+
+            function updateCards(speed) {
+                if (!cardApproach || !cardRecede) return;
+                
+                // Reset transparencies
+                if (Math.abs(speed) < 0.2) {
+                    cardApproach.style.opacity = '0.5';
+                    cardRecede.style.opacity = '0.5';
+                    cardApproach.classList.remove('ring-2', 'ring-blue-400', 'shadow-lg');
+                    cardRecede.classList.remove('ring-2', 'ring-red-400', 'shadow-lg');
+                    return;
+                }
+
+                // Always highlight both when moving, because both effects happen simultaneously 
+                // relative to observers on either side
+                cardApproach.style.opacity = '1';
+                cardRecede.style.opacity = '1';
+                
+                if (speed > 0) {
+                    // Moving Right: Right side approaches, Left side recedes
+                    // We just highlight the cards to show the effect exists
+                    cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
+                    cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
+                } else {
+                    // Moving Left
+                    cardApproach.classList.add('ring-2', 'ring-blue-400', 'shadow-lg');
+                    cardRecede.classList.add('ring-2', 'ring-red-400', 'shadow-lg');
+                }
+            }
 
         // Animation Loop
         function animate() {
@@ -432,7 +1213,7 @@
             drawObserver(cx, observerY);
 
             // 7. Update Audio if playing
-            if (isAudioPlaying && oscillator) {
+            if (isAudioPlaying && oscillator1 && oscillator2) {
                 updateAudioFrequency();
             }
 
@@ -606,10 +1387,34 @@
         }
 
         function updateAudioFrequency() {
-            if (!oscillator) return;
+            if (!oscillator1 || !oscillator2) return;
             
-            const newFreq = calculateDopplerFrequency();
-            oscillator.frequency.setValueAtTime(newFreq, audioContext.currentTime);
+            // Calcular la frecuencia base con efecto Doppler
+            const dopplerFreq = calculateDopplerFrequency();
+            
+            // Mantener la proporción entre los dos tonos de la sirena
+            const freqRatio = sirenFrequency2 / sirenFrequency1; // Ratio entre los dos tonos
+            const freq1 = dopplerFreq;
+            const freq2 = dopplerFreq * freqRatio;
+            
+            // Actualizar frecuencia objetivo
+            targetFrequency = dopplerFreq;
+            
+            // Transición suave usando linearRampToValueAtTime (0.15 segundos para suavidad)
+            const rampTime = 0.15; // Tiempo de transición en segundos (más suave)
+            const currentTime = audioContext.currentTime;
+            
+            // Aplicar transición suave a ambos osciladores manteniendo la diferencia de tonos
+            oscillator1.frequency.cancelScheduledValues(currentTime);
+            oscillator1.frequency.setValueAtTime(oscillator1.frequency.value, currentTime);
+            oscillator1.frequency.linearRampToValueAtTime(freq1, currentTime + rampTime);
+            
+            oscillator2.frequency.cancelScheduledValues(currentTime);
+            oscillator2.frequency.setValueAtTime(oscillator2.frequency.value, currentTime);
+            oscillator2.frequency.linearRampToValueAtTime(freq2, currentTime + rampTime);
+            
+            // Actualizar frecuencia actual
+            currentFrequency = targetFrequency;
         }
 
         function startAudio() {
@@ -621,49 +1426,883 @@
                 audioContext.resume();
             }
             
-            oscillator = audioContext.createOscillator();
+            // Crear nodos de ganancia para cada oscilador (para alternar)
+            const gainNode1 = audioContext.createGain();
+            const gainNode2 = audioContext.createGain();
             gainNode = audioContext.createGain();
             
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(baseFrequency, audioContext.currentTime);
+            // Crear dos osciladores para la sirena
+            oscillator1 = audioContext.createOscillator();
+            oscillator2 = audioContext.createOscillator();
             
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            // Configurar tipo de onda (square para sonido más parecido a sirena)
+            oscillator1.type = 'square';
+            oscillator2.type = 'square';
             
-            oscillator.connect(gainNode);
+            // Frecuencias iniciales
+            oscillator1.frequency.setValueAtTime(sirenFrequency1, audioContext.currentTime);
+            oscillator2.frequency.setValueAtTime(sirenFrequency2, audioContext.currentTime);
+            
+            // Ganancia inicial (ambos en 0, se alternarán)
+            gainNode1.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode2.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.25, audioContext.currentTime); // Volumen general
+            
+            // Conectar osciladores
+            oscillator1.connect(gainNode1);
+            oscillator2.connect(gainNode2);
+            gainNode1.connect(gainNode);
+            gainNode2.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            oscillator.start();
+            // Iniciar osciladores
+            oscillator1.start();
+            oscillator2.start();
+            
+            // Función para alternar entre los dos tonos (efecto sirena)
+            function alternateSiren() {
+                if (!isAudioPlaying) return;
+                
+                const currentTime = audioContext.currentTime;
+                const cycleTime = 1 / sirenSpeed; // Tiempo de un ciclo completo
+                const halfCycle = cycleTime / 2;
+                
+                // Crear transiciones suaves entre los dos tonos
+                if (sirenPhase % 2 === 0) {
+                    // Activar primer tono, desactivar segundo (con transición suave)
+                    gainNode1.gain.cancelScheduledValues(currentTime);
+                    gainNode1.gain.setValueAtTime(gainNode1.gain.value, currentTime);
+                    gainNode1.gain.linearRampToValueAtTime(0.5, currentTime + 0.05);
+                    
+                    gainNode2.gain.cancelScheduledValues(currentTime);
+                    gainNode2.gain.setValueAtTime(gainNode2.gain.value, currentTime);
+                    gainNode2.gain.linearRampToValueAtTime(0, currentTime + 0.05);
+                } else {
+                    // Activar segundo tono, desactivar primero (con transición suave)
+                    gainNode1.gain.cancelScheduledValues(currentTime);
+                    gainNode1.gain.setValueAtTime(gainNode1.gain.value, currentTime);
+                    gainNode1.gain.linearRampToValueAtTime(0, currentTime + 0.05);
+                    
+                    gainNode2.gain.cancelScheduledValues(currentTime);
+                    gainNode2.gain.setValueAtTime(gainNode2.gain.value, currentTime);
+                    gainNode2.gain.linearRampToValueAtTime(0.5, currentTime + 0.05);
+                }
+                
+                sirenPhase++;
+                
+                // Programar siguiente alternancia usando requestAnimationFrame para mejor sincronización
+                const nextTime = currentTime + halfCycle;
+                const delay = Math.max(0, (nextTime - audioContext.currentTime) * 1000);
+                
+                if (delay > 0) {
+                    setTimeout(() => alternateSiren(), delay);
+                } else {
+                    requestAnimationFrame(() => alternateSiren());
+                }
+            }
+            
+            // Iniciar alternancia después de un pequeño delay
+            setTimeout(() => alternateSiren(), 50);
+            
             isAudioPlaying = true;
-            audioButtonText.textContent = 'Detener Sonido';
-            audioToggle.classList.remove('bg-green-600', 'hover:bg-green-700');
-            audioToggle.classList.add('bg-red-600', 'hover:bg-red-700');
+            currentFrequency = baseFrequency;
+            targetFrequency = baseFrequency;
+            
+            if (audioButtonText) audioButtonText.textContent = 'Detener Sonido';
+            if (audioToggle) {
+                audioToggle.classList.remove('bg-green-600', 'hover:bg-green-700');
+                audioToggle.classList.add('bg-red-600', 'hover:bg-red-700');
+            }
         }
 
         function stopAudio() {
-            if (oscillator) {
-                oscillator.stop();
-                oscillator.disconnect();
+            if (oscillator1) {
+                oscillator1.stop();
+                oscillator1.disconnect();
+                oscillator1 = null;
+            }
+            if (oscillator2) {
+                oscillator2.stop();
+                oscillator2.disconnect();
+                oscillator2 = null;
+            }
+            if (gainNode) {
                 gainNode.disconnect();
-                oscillator = null;
                 gainNode = null;
             }
             isAudioPlaying = false;
-            audioButtonText.textContent = 'Escuchar Sonido';
-            audioToggle.classList.remove('bg-red-600', 'hover:bg-red-700');
-            audioToggle.classList.add('bg-green-600', 'hover:bg-green-700');
+            sirenPhase = 0;
+            if (audioButtonText) audioButtonText.textContent = 'Escuchar Sonido';
+            if (audioToggle) {
+                audioToggle.classList.remove('bg-red-600', 'hover:bg-red-700');
+                audioToggle.classList.add('bg-green-600', 'hover:bg-green-700');
+            }
         }
 
-        // Audio Toggle Event
-        audioToggle.addEventListener('click', () => {
-            if (isAudioPlaying) {
-                stopAudio();
-            } else {
-                startAudio();
+            // Audio Toggle Event
+            if (audioToggle) {
+                audioToggle.addEventListener('click', () => {
+                    if (isAudioPlaying) {
+                        stopAudio();
+                    } else {
+                        startAudio();
+                    }
+                });
             }
+
+            // Start
+            animate();
+        }
+        
+        // Inicializar el simulador cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSimulator);
+        } else {
+            initSimulator();
+        }
+
+        // ========== SIMULADOR 2: SONAR DE DELFÍN ==========
+        function initDolphinSimulator() {
+            const dolphinCanvas = document.getElementById('dolphinCanvas');
+            if (!dolphinCanvas) {
+                console.error('Canvas del delfín no encontrado');
+                return;
+            }
+            const dolphinCtx = dolphinCanvas.getContext('2d');
+            const dolphinTrashEl = document.getElementById('dolphin-trash-can');
+            const dolphinRockSourceEl = document.getElementById('dolphin-rock-source');
+            const dolphinFishSourceEl = document.getElementById('dolphin-fish-source');
+            const dolphinSharkSourceEl = document.getElementById('dolphin-shark-source');
+            const dolphinWaveCountInput = document.getElementById('dolphin-waveCount');
+
+            if (!dolphinTrashEl || !dolphinRockSourceEl || !dolphinFishSourceEl || !dolphinSharkSourceEl || !dolphinWaveCountInput) {
+                console.error('Elementos del simulador del delfín no encontrados');
+                return;
+            }
+
+            // Configuración
+            let dolphinWidth, dolphinHeight;
+            const dolphin = { x: 0, y: 0, size: 50, radius: 30 }; 
+            
+            // Arrays de objetos
+            const dolphinRocks = []; 
+            const dolphinFishes = []; 
+            const dolphinSharks = [];
+            let dolphinWaves = [];
+            
+            // Colores
+            const COLOR_SONAR = 'rgba(0, 255, 128,';   
+            const COLOR_ECHO = 'rgba(255, 220, 0,';
+            const COLOR_RIPPLE = 'rgba(100, 200, 255,'; 
+            const COLOR_SHARK_ECHO = 'rgba(255, 50, 50,';
+            
+            // Estado del Ratón / Arrastre
+            const dolphinDrag = {
+                active: false,
+                item: null,      
+                type: null,
+                offsetX: 0,
+                offsetY: 0
+            };
+
+            function dolphinResize() {
+                const container = dolphinCanvas.parentElement;
+                dolphinWidth = container.clientWidth;
+                dolphinHeight = container.clientHeight || 600;
+                dolphinCanvas.width = dolphinWidth;
+                dolphinCanvas.height = dolphinHeight;
+                dolphin.x = dolphinWidth / 2;
+                dolphin.y = dolphinHeight / 2;
+            }
+
+            class DolphinWave {
+                constructor(x, y, type) {
+                    this.x = x;
+                    this.y = y;
+                    this.radius = 1;
+                    this.type = type; 
+                    if (type === 'sonar') this.speed = 2;
+                    else if (type === 'echo') this.speed = 1.5;
+                    else if (type === 'shark_echo') this.speed = 2.2;
+                    else this.speed = 1.8;
+
+                    this.maxRadius = Math.max(dolphinWidth, dolphinHeight) * 0.8;
+                    this.alpha = 1;
+                    this.dead = false;
+                    this.hitList = []; 
+                }
+
+                update() {
+                    this.radius += this.speed;
+                    this.alpha -= 0.002;
+
+                    if (this.alpha <= 0 || this.radius > this.maxRadius) {
+                        this.dead = true;
+                    }
+
+                    if (this.type === 'sonar') {
+                        dolphinRocks.forEach((rock, index) => {
+                            if (dolphinDrag.active && dolphinDrag.item === rock) return;
+                            const hitId = 'rock-'+index;
+                            if (this.hitList.includes(hitId)) return;
+
+                            const dx = this.x - rock.x;
+                            const dy = this.y - rock.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+
+                            if (Math.abs(dist - this.radius) < rock.radius + 10) {
+                                dolphinWaves.push(new DolphinWave(rock.x, rock.y, 'echo'));
+                                this.hitList.push(hitId);
+                                rock.pulse = 1.2; 
+                            }
+                        });
+
+                        dolphinFishes.forEach((fish, index) => {
+                            if (dolphinDrag.active && dolphinDrag.item === fish) return;
+                            const hitId = 'fish-'+index;
+                            if (this.hitList.includes(hitId)) return;
+
+                            const dx = this.x - fish.x;
+                            const dy = this.y - fish.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+
+                            if (Math.abs(dist - this.radius) < fish.radius + 10) {
+                                dolphinWaves.push(new DolphinWave(fish.x, fish.y, 'ripple'));
+                                this.hitList.push(hitId);
+                                fish.pulse = 1.5; 
+                            }
+                        });
+
+                        dolphinSharks.forEach((shark, index) => {
+                            if (dolphinDrag.active && dolphinDrag.item === shark) return;
+                            const hitId = 'shark-'+index;
+                            if (this.hitList.includes(hitId)) return;
+
+                            const dx = this.x - shark.x;
+                            const dy = this.y - shark.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+
+                            if (Math.abs(dist - this.radius) < shark.radius + 10) {
+                                dolphinWaves.push(new DolphinWave(shark.x, shark.y, 'shark_echo'));
+                                this.hitList.push(hitId);
+                                shark.pulse = 1.5; 
+                            }
+                        });
+                    }
+                }
+
+                draw() {
+                    dolphinCtx.beginPath();
+                    dolphinCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    dolphinCtx.lineWidth = 4;
+                    
+                    let colorBase;
+                    if (this.type === 'sonar') colorBase = COLOR_SONAR;
+                    else if (this.type === 'echo') colorBase = COLOR_ECHO;
+                    else if (this.type === 'shark_echo') colorBase = COLOR_SHARK_ECHO;
+                    else colorBase = COLOR_RIPPLE;
+
+                    dolphinCtx.strokeStyle = colorBase + this.alpha + ')';
+                    
+                    if (this.type !== 'ripple') {
+                        dolphinCtx.shadowBlur = 10;
+                        dolphinCtx.shadowColor = colorBase + '1)';
+                    }
+                    
+                    dolphinCtx.stroke();
+                    dolphinCtx.shadowBlur = 0;
+                }
+            }
+
+            function triggerDolphinSonar() {
+                dolphinFishes.forEach(f => f.moving = true);
+                dolphinSharks.forEach(s => s.moving = true);
+
+                let count = parseInt(dolphinWaveCountInput.value);
+                if (isNaN(count) || count < 1) count = 1;
+                if (count > 50) count = 50; 
+
+                for(let i = 0; i < count; i++) {
+                    setTimeout(() => {
+                        dolphinWaves.push(new DolphinWave(dolphin.x, dolphin.y, 'sonar'));
+                    }, i * 500); 
+                }
+            }
+
+            function dolphinLoop() {
+                dolphinCtx.fillStyle = '#001e36';
+                dolphinCtx.fillRect(0, 0, dolphinWidth, dolphinHeight);
+
+                for (let i = dolphinWaves.length - 1; i >= 0; i--) {
+                    let w = dolphinWaves[i];
+                    w.update();
+                    w.draw();
+                    if (w.dead) dolphinWaves.splice(i, 1);
+                }
+
+                dolphinCtx.textAlign = 'center';
+                dolphinCtx.textBaseline = 'middle';
+                dolphinRocks.forEach(rock => {
+                    if (dolphinDrag.active && dolphinDrag.item === rock) return;
+                    drawDolphinRock(rock);
+                });
+
+                for (let i = dolphinFishes.length - 1; i >= 0; i--) {
+                    const fish = dolphinFishes[i];
+                    if (fish.moving && (!dolphinDrag.active || dolphinDrag.item !== fish)) {
+                        fish.x += Math.cos(fish.angle) * fish.speed;
+                        fish.y += Math.sin(fish.angle) * fish.speed;
+                        if (fish.x < -100 || fish.x > dolphinWidth + 100 || fish.y < -100 || fish.y > dolphinHeight + 100) {
+                            dolphinFishes.splice(i, 1); continue; 
+                        }
+                    }
+                    if (dolphinDrag.active && dolphinDrag.item === fish) continue; 
+                    drawDolphinFish(fish);
+                }
+
+                for (let i = dolphinSharks.length - 1; i >= 0; i--) {
+                    const shark = dolphinSharks[i];
+                    if (shark.moving && (!dolphinDrag.active || dolphinDrag.item !== shark)) {
+                        shark.x += Math.cos(shark.angle) * shark.speed;
+                        shark.y += Math.sin(shark.angle) * shark.speed;
+                        if (shark.x < -100 || shark.x > dolphinWidth + 100 || shark.y < -100 || shark.y > dolphinHeight + 100) {
+                            dolphinSharks.splice(i, 1); continue; 
+                        }
+                    }
+                    if (dolphinDrag.active && dolphinDrag.item === shark) continue; 
+                    drawDolphinShark(shark);
+                }
+
+                dolphinCtx.font = `${dolphin.size}px sans-serif`;
+                const floatY = Math.sin(Date.now() / 500) * 5; 
+                dolphinCtx.fillText('🐬', dolphin.x, dolphin.y + floatY);
+
+                if (dolphinDrag.active && dolphinDrag.item) {
+                    if (dolphinDrag.type === 'rotate_fish') {
+                        drawDolphinRotationHandle(dolphinDrag.item, true); 
+                    } else if (dolphinDrag.type === 'rotate_shark') {
+                        drawDolphinRotationHandle(dolphinDrag.item, true);
+                    } else {
+                        dolphinCtx.globalAlpha = 0.8;
+                        if (dolphinDrag.type.includes('rock')) drawDolphinRock(dolphinDrag.item);
+                        else if (dolphinDrag.type.includes('fish')) drawDolphinFish(dolphinDrag.item);
+                        else if (dolphinDrag.type.includes('shark')) drawDolphinShark(dolphinDrag.item);
+                        dolphinCtx.globalAlpha = 1.0;
+                    }
+                }
+
+                requestAnimationFrame(dolphinLoop);
+            }
+
+            function drawDolphinRock(rock) {
+                let scale = 1;
+                if (rock.pulse && rock.pulse > 1) {
+                    scale = rock.pulse;
+                    rock.pulse -= 0.05;
+                }
+                if (dolphinDrag.active && dolphinDrag.item === rock) scale = 1.1;
+                dolphinCtx.font = `${rock.size * scale}px sans-serif`;
+                dolphinCtx.fillText('🪨', rock.x, rock.y);
+            }
+
+            function drawDolphinFish(fish) {
+                drawDolphinSwimEntity(fish, '🐟', 'fish');
+            }
+
+            function drawDolphinShark(shark) {
+                drawDolphinSwimEntity(shark, '🦈', 'shark');
+            }
+
+            function drawDolphinSwimEntity(entity, emoji, type) {
+                dolphinCtx.save();
+                dolphinCtx.translate(entity.x, entity.y);
+                
+                let scale = 1;
+                if (entity.pulse && entity.pulse > 1) {
+                    scale = entity.pulse;
+                    entity.pulse -= 0.05;
+                }
+
+                dolphinCtx.font = `${entity.size * scale}px sans-serif`;
+                if (Math.abs(entity.angle) > Math.PI / 2) {
+                    dolphinCtx.scale(-1, 1); 
+                }
+                dolphinCtx.fillText(emoji, 0, 0);
+                dolphinCtx.restore();
+
+                let isInteracting = dolphinDrag.active && dolphinDrag.item === entity;
+                let isRotating = isInteracting && (dolphinDrag.type === `rotate_${type}`);
+                
+                if (!entity.moving && (!isInteracting || isRotating)) {
+                    drawDolphinRotationHandle(entity, isRotating);
+                }
+            }
+
+            function drawDolphinRotationHandle(entity, isActive) {
+                const handleDist = entity.radius + 35;
+                const hx = entity.x + Math.cos(entity.angle) * handleDist;
+                const hy = entity.y + Math.sin(entity.angle) * handleDist;
+
+                dolphinCtx.beginPath();
+                dolphinCtx.moveTo(entity.x, entity.y);
+                dolphinCtx.lineTo(hx, hy);
+                dolphinCtx.strokeStyle = isActive ? 'rgba(255, 100, 100, 0.9)' : 'rgba(255, 100, 100, 0.4)';
+                dolphinCtx.lineWidth = 2;
+                dolphinCtx.setLineDash([5, 5]);
+                dolphinCtx.stroke();
+                dolphinCtx.setLineDash([]);
+
+                dolphinCtx.beginPath();
+                dolphinCtx.arc(hx, hy, isActive ? 10 : 6, 0, Math.PI * 2);
+                dolphinCtx.fillStyle = isActive ? 'rgba(255, 50, 50, 0.9)' : 'rgba(255, 50, 50, 0.5)';
+                dolphinCtx.fill();
+                dolphinCtx.stroke();
+            }
+
+            function getDolphinGlobalPos(e) {
+                if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                return { x: e.clientX, y: e.clientY };
+            }
+
+            function getDolphinPointerPos(e) {
+                const globalPos = getDolphinGlobalPos(e);
+                const rect = dolphinCanvas.getBoundingClientRect();
+                return { 
+                    x: globalPos.x - rect.left, 
+                    y: globalPos.y - rect.top,
+                    globalX: globalPos.x,
+                    globalY: globalPos.y
+                };
+            }
+
+            function isOverDolphinTrash(x, y) {
+                const rect = dolphinTrashEl.getBoundingClientRect();
+                return (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+            }
+
+            function isOverDolphinElement(globalX, globalY, elId) {
+                const rect = document.getElementById(elId).getBoundingClientRect();
+                return (globalX >= rect.left && globalX <= rect.right && globalY >= rect.top && globalY <= rect.bottom);
+            }
+
+            function handleDolphinStart(e) {
+                const globalPos = getDolphinGlobalPos(e);
+                const pos = getDolphinPointerPos(e);
+                
+                // Verificar si se hace clic en los elementos de la toolbar (usando coordenadas globales)
+                if (isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-rock-source')) {
+                    // Cuando se arrastra desde la toolbar, inicializar en el centro del canvas
+                    const newRock = { x: dolphinWidth / 2, y: dolphinHeight / 2, size: 40 + Math.random() * 30, radius: 25, pulse: 1 };
+                    newRock.radius = newRock.size / 2;
+                    dolphinDrag.active = true; dolphinDrag.type = 'new_rock'; dolphinDrag.item = newRock;
+                    // Actualizar posición inicial al arrastrar
+                    if (pos.x >= 0 && pos.x <= dolphinWidth && pos.y >= 0 && pos.y <= dolphinHeight) {
+                        dolphinDrag.item.x = pos.x;
+                        dolphinDrag.item.y = pos.y;
+                    }
+                    return;
+                }
+
+                if (isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-fish-source')) {
+                    const newFish = { 
+                        x: pos.x, y: pos.y, 
+                        size: 40, radius: 20, pulse: 1,
+                        angle: 0, speed: 0.6, moving: false
+                    };
+                    // Si viene de fuera del canvas, usar posición del canvas
+                    if (pos.x < 0 || pos.x > dolphinWidth || pos.y < 0 || pos.y > dolphinHeight) {
+                        newFish.x = dolphinWidth / 2;
+                        newFish.y = dolphinHeight / 2;
+                    }
+                    dolphinDrag.active = true; dolphinDrag.type = 'new_fish'; dolphinDrag.item = newFish;
+                    return;
+                }
+
+                if (isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-shark-source')) {
+                    const newShark = { 
+                        x: pos.x, y: pos.y, 
+                        size: 60, radius: 30, pulse: 1,
+                        angle: 0, 
+                        speed: 1.2,
+                        moving: false 
+                    };
+                    // Si viene de fuera del canvas, usar posición del canvas
+                    if (pos.x < 0 || pos.x > dolphinWidth || pos.y < 0 || pos.y > dolphinHeight) {
+                        newShark.x = dolphinWidth / 2;
+                        newShark.y = dolphinHeight / 2;
+                    }
+                    dolphinDrag.active = true; dolphinDrag.type = 'new_shark'; dolphinDrag.item = newShark;
+                    return;
+                }
+
+                if (checkDolphinEntityInteraction(dolphinFishes, pos, 'fish')) return;
+                if (checkDolphinEntityInteraction(dolphinSharks, pos, 'shark')) return;
+
+                for (let i = dolphinRocks.length - 1; i >= 0; i--) {
+                    const r = dolphinRocks[i];
+                    if (Math.hypot(pos.x - r.x, pos.y - r.y) < r.radius + 10) {
+                        dolphinDrag.active = true; dolphinDrag.type = 'existing_rock'; dolphinDrag.item = r;
+                        dolphinDrag.offsetX = pos.x - r.x; dolphinDrag.offsetY = pos.y - r.y; return;
+                    }
+                }
+
+                if (Math.hypot(pos.x - dolphin.x, pos.y - dolphin.y) < 50) {
+                    triggerDolphinSonar();
+                }
+            }
+
+            function checkDolphinEntityInteraction(array, pos, typeName) {
+                for (let i = array.length - 1; i >= 0; i--) {
+                    const e = array[i];
+                    if (e.moving) continue; 
+                    const handleDist = e.radius + 35;
+                    const hx = e.x + Math.cos(e.angle) * handleDist;
+                    const hy = e.y + Math.sin(e.angle) * handleDist;
+                    
+                    if (Math.hypot(pos.x - hx, pos.y - hy) < 20) {
+                        dolphinDrag.active = true; dolphinDrag.type = `rotate_${typeName}`; dolphinDrag.item = e; return true;
+                    }
+                }
+                for (let i = array.length - 1; i >= 0; i--) {
+                    const e = array[i];
+                    if (e.moving) continue;
+                    if (Math.hypot(pos.x - e.x, pos.y - e.y) < e.radius + 10) {
+                        dolphinDrag.active = true; dolphinDrag.type = `existing_${typeName}`; dolphinDrag.item = e;
+                        dolphinDrag.offsetX = pos.x - e.x; dolphinDrag.offsetY = pos.y - e.y; return true;
+                    }
+                }
+                return false;
+            }
+
+            function handleDolphinMove(e) {
+                if (!dolphinDrag.active) return;
+                e.preventDefault();
+                const pos = getDolphinPointerPos(e);
+
+                if (dolphinDrag.type.includes('rotate')) {
+                    const dx = pos.x - dolphinDrag.item.x;
+                    const dy = pos.y - dolphinDrag.item.y;
+                    dolphinDrag.item.angle = Math.atan2(dy, dx);
+                } else {
+                    // Limitar las coordenadas al área del canvas
+                    dolphinDrag.item.x = Math.max(0, Math.min(dolphinWidth, pos.x)); 
+                    dolphinDrag.item.y = Math.max(0, Math.min(dolphinHeight, pos.y));
+                    
+                    const globalPos = getDolphinGlobalPos(e);
+                    if (isOverDolphinTrash(globalPos.x, globalPos.y)) dolphinTrashEl.classList.add('trash-hover');
+                    else dolphinTrashEl.classList.remove('trash-hover');
+                }
+            }
+
+            function handleDolphinEnd(e) {
+                if (!dolphinDrag.active) return;
+                dolphinTrashEl.classList.remove('trash-hover');
+
+                if (dolphinDrag.type.includes('rotate')) {
+                    dolphinDrag.active = false; dolphinDrag.item = null; return;
+                }
+
+                const globalPos = getDolphinGlobalPos(e);
+                const droppedInTrash = isOverDolphinTrash(globalPos.x, globalPos.y);
+                
+                if (droppedInTrash) {
+                    if (dolphinDrag.type === 'existing_rock') removeDolphinItem(dolphinRocks, dolphinDrag.item);
+                    else if (dolphinDrag.type === 'existing_fish') removeDolphinItem(dolphinFishes, dolphinDrag.item);
+                    else if (dolphinDrag.type === 'existing_shark') removeDolphinItem(dolphinSharks, dolphinDrag.item);
+                } else {
+                    if (dolphinDrag.type === 'new_rock') dolphinRocks.push(dolphinDrag.item);
+                    else if (dolphinDrag.type === 'new_fish') dolphinFishes.push(dolphinDrag.item);
+                    else if (dolphinDrag.type === 'new_shark') dolphinSharks.push(dolphinDrag.item);
+                }
+
+                dolphinDrag.active = false; dolphinDrag.item = null; dolphinDrag.type = null;
+            }
+
+            function removeDolphinItem(arr, item) {
+                const idx = arr.indexOf(item);
+                if (idx > -1) arr.splice(idx, 1);
+            }
+
+            // Event listeners en la ventana para capturar eventos desde la toolbar también
+            window.addEventListener('mousedown', (e) => {
+                const globalPos = getDolphinGlobalPos(e);
+                // Solo procesar si es en el canvas, toolbar o elementos relacionados
+                if (isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-rock-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-fish-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-shark-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-trash-can') ||
+                    (globalPos.x >= dolphinCanvas.getBoundingClientRect().left && 
+                     globalPos.x <= dolphinCanvas.getBoundingClientRect().right &&
+                     globalPos.y >= dolphinCanvas.getBoundingClientRect().top && 
+                     globalPos.y <= dolphinCanvas.getBoundingClientRect().bottom)) {
+                    handleDolphinStart(e);
+                }
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+                if (dolphinDrag.active) {
+                    handleDolphinMove(e);
+                }
+            });
+            
+            window.addEventListener('mouseup', (e) => {
+                if (dolphinDrag.active) {
+                    handleDolphinEnd(e);
+                }
+            });
+            
+            window.addEventListener('touchstart', (e) => {
+                const globalPos = getDolphinGlobalPos(e);
+                if (isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-rock-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-fish-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-shark-source') ||
+                    isOverDolphinElement(globalPos.x, globalPos.y, 'dolphin-trash-can') ||
+                    (globalPos.x >= dolphinCanvas.getBoundingClientRect().left && 
+                     globalPos.x <= dolphinCanvas.getBoundingClientRect().right &&
+                     globalPos.y >= dolphinCanvas.getBoundingClientRect().top && 
+                     globalPos.y <= dolphinCanvas.getBoundingClientRect().bottom)) {
+                    e.preventDefault();
+                    handleDolphinStart(e);
+                }
+            }, { passive: false });
+            
+            window.addEventListener('touchmove', (e) => {
+                if (dolphinDrag.active) {
+                    e.preventDefault();
+                    handleDolphinMove(e);
+                }
+            }, { passive: false });
+            
+            window.addEventListener('touchend', (e) => {
+                if (dolphinDrag.active) {
+                    handleDolphinEnd(e);
+                }
+            });
+            window.addEventListener('resize', dolphinResize);
+
+            dolphinResize();
+            dolphinLoop();
+        }
+
+        // Inicializar simulador del delfín cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDolphinSimulator);
+        } else {
+            initDolphinSimulator();
+        }
+
+        // Navegación entre secciones
+        function showSection(sectionName) {
+            const heroSection = document.getElementById('hero-section');
+            const mainContent = document.getElementById('main-content');
+            const simulatorContent = document.getElementById('simulator-content');
+            const heroDescription = document.getElementById('hero-description');
+            const navContexto = document.getElementById('nav-contexto');
+            const navProfundidad = document.getElementById('nav-profundidad');
+            const indicator = document.getElementById('nav-indicator');
+            
+            // Usar requestAnimationFrame para asegurar que los elementos tengan sus dimensiones
+            requestAnimationFrame(() => {
+                const buttonWidth = navContexto.offsetWidth;
+                const gap = 4; // gap entre botones (gap-1 = 4px)
+                const padding = 4; // padding del contenedor (p-1 = 4px)
+                
+                // Mostrar la sección seleccionada y animar el indicador
+                if (sectionName === 'contexto') {
+                    // Mostrar hero con el simulador debajo
+                    heroSection.classList.remove('hidden');
+                    simulatorContent.classList.remove('hidden');
+                    mainContent.classList.add('hidden');
+                    
+                    // Ocultar todas las secciones primero
+                    document.getElementById('section-contexto').classList.add('hidden');
+                    document.getElementById('section-profundidad').classList.add('hidden');
+                    
+                    // Mostrar sección contexto
+                    document.getElementById('section-contexto').classList.remove('hidden');
+                    
+                    // Ocultar descripción del hero cuando se muestra el simulador
+                    heroDescription.classList.add('hidden');
+                    
+                    // Mover indicador a la izquierda
+                    indicator.style.left = padding + 'px';
+                    indicator.style.width = buttonWidth + 'px';
+                    
+                    // Cambiar estilos del botón activo
+                    navContexto.className = 'relative px-6 py-1.5 rounded-full text-sm font-medium transition-all z-10 bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500';
+                    navProfundidad.className = 'relative px-5 py-1.5 rounded-full text-sm font-medium transition-colors z-10 text-slate-400 hover:text-white';
+                } else if (sectionName === 'profundidad') {
+                    // Mostrar hero con el contenido de profundidad debajo
+                    heroSection.classList.remove('hidden');
+                    simulatorContent.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    
+                    // Ocultar todas las secciones primero
+                    document.getElementById('section-contexto').classList.add('hidden');
+                    document.getElementById('section-profundidad').classList.add('hidden');
+                    
+                    // Mostrar sección profundidad
+                    document.getElementById('section-profundidad').classList.remove('hidden');
+                    
+                    // Ocultar descripción del hero cuando se muestra el contenido
+                    heroDescription.classList.add('hidden');
+                    
+                    // Mover indicador a la derecha
+                    const leftPosition = padding + buttonWidth + gap;
+                    indicator.style.left = leftPosition + 'px';
+                    indicator.style.width = buttonWidth + 'px';
+                    
+                    // Cambiar estilos del botón activo
+                    navProfundidad.className = 'relative px-5 py-1.5 rounded-full text-sm font-medium transition-all z-10 bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500';
+                    navContexto.className = 'relative px-6 py-1.5 rounded-full text-sm font-medium transition-colors z-10 text-slate-400 hover:text-white';
+                }
+            });
+        }
+        
+        // Funcionalidad de Acordeón para Bloques
+        function toggleBlock(blockId) {
+            const content = document.getElementById(blockId);
+            const icon = document.getElementById('icon-' + blockId);
+            
+            if (content.classList.contains('hidden')) {
+                // Abrir
+                content.classList.remove('hidden');
+                icon.innerText = '-';
+                icon.classList.add('text-slate-400'); // Cambiar color al abrir si se desea
+                icon.classList.remove('text-blue-600');
+            } else {
+                // Cerrar
+                content.classList.add('hidden');
+                icon.innerText = '+';
+                icon.classList.remove('text-slate-400');
+                icon.classList.add('text-blue-600');
+            }
+        }
+
+        // Script de Animación del Canvas de Fondo (Portada)
+        const backgroundCanvas = document.getElementById('dopplerCanvas');
+        const bgCtx = backgroundCanvas.getContext('2d');
+
+        let bgWidth, bgHeight;
+        let bgWaves = [];
+        // Inicializar fuente en el centro
+        let bgSource = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        let bgFrameCount = 0;
+        
+        // CONFIGURACIÓN AJUSTADA
+        const WAVE_SPEED = 2.5;    // Velocidad de expansión de la onda
+        const EMISSION_RATE = 45;  // ¡MUCHO MÁS LENTO!
+        
+        function bgResize() {
+            bgWidth = window.innerWidth;
+            bgHeight = window.innerHeight;
+            backgroundCanvas.width = bgWidth;
+            backgroundCanvas.height = bgHeight;
+        }
+        window.addEventListener('resize', bgResize);
+        bgResize();
+
+        // Escuchar el movimiento del mouse
+        window.addEventListener('mousemove', (e) => {
+            bgSource.x = e.clientX;
+            bgSource.y = e.clientY;
         });
 
-        // Start
-        animate();
+        // Soporte para touch en móviles
+        window.addEventListener('touchmove', (e) => {
+            bgSource.x = e.touches[0].clientX;
+            bgSource.y = e.touches[0].clientY;
+        });
+
+        class Wave {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.opacity = 0.6; // Opacidad inicial
+            }
+
+            update() {
+                this.radius += WAVE_SPEED;
+                this.opacity -= 0.0015; // Desvanecimiento muy lento para que lleguen lejos
+            }
+
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                
+                // Color dinámico basado en la opacidad
+                bgCtx.strokeStyle = `rgba(56, 189, 248, ${this.opacity})`; 
+                bgCtx.lineWidth = 2; // Líneas finas y elegantes
+                bgCtx.stroke();
+            }
+        }
+
+        function bgAnimate() {
+            // Limpiar canvas
+            bgCtx.clearRect(0, 0, bgWidth, bgHeight);
+
+            // Generar ondas automáticamente en la posición del mouse
+            if (bgFrameCount % EMISSION_RATE === 0) {
+                bgWaves.push(new Wave(bgSource.x, bgSource.y));
+            }
+
+            // Actualizar y dibujar ondas
+            for (let i = bgWaves.length - 1; i >= 0; i--) {
+                bgWaves[i].update();
+                bgWaves[i].draw();
+                
+                if (bgWaves[i].opacity <= 0) {
+                    bgWaves.splice(i, 1);
+                }
+            }
+
+            // Dibujar el punto del "mouse" (fuente)
+            bgCtx.beginPath();
+            bgCtx.arc(bgSource.x, bgSource.y, 4, 0, Math.PI * 2);
+            bgCtx.fillStyle = '#ffffff';
+            bgCtx.fill();
+            
+            // Brillo alrededor del mouse
+            bgCtx.beginPath();
+            bgCtx.arc(bgSource.x, bgSource.y, 15, 0, Math.PI * 2);
+            bgCtx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+            bgCtx.fill();
+
+            bgFrameCount++;
+            requestAnimationFrame(bgAnimate);
+        }
+
+        bgAnimate();
+
+        // Inicializar: mostrar hero con simulador visible por defecto
+        window.addEventListener('DOMContentLoaded', () => {
+            // Mostrar hero con el simulador debajo desde el inicio
+            document.getElementById('hero-section').classList.remove('hidden');
+            document.getElementById('simulator-content').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('hero-description').classList.add('hidden');
+            document.getElementById('section-contexto').classList.remove('hidden');
+            
+            // Actualizar navegación para mostrar "Simulador" como activo
+            const navContexto = document.getElementById('nav-contexto');
+            const navProfundidad = document.getElementById('nav-profundidad');
+            const indicator = document.getElementById('nav-indicator');
+            
+            requestAnimationFrame(() => {
+                const buttonWidth = navContexto.offsetWidth;
+                const gap = 4;
+                const padding = 4;
+                
+                indicator.style.left = padding + 'px';
+                indicator.style.width = buttonWidth + 'px';
+                
+                navContexto.className = 'relative px-6 py-1.5 rounded-full text-sm font-medium transition-all z-10 bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500';
+                navProfundidad.className = 'relative px-5 py-1.5 rounded-full text-sm font-medium transition-colors z-10 text-slate-400 hover:text-white';
+            });
+        });
 
     </script>
 </body>
